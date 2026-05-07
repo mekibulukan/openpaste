@@ -13,4 +13,18 @@ for (const name of ['server.js', 'public', 'content']) {
   await fs.cp(path.join(root, name), path.join(dist, name), { recursive: true });
 }
 
+await fs.writeFile(
+  path.join(dist, 'package.json'),
+  JSON.stringify(
+    {
+      name: 'boss-blog-dist',
+      private: true,
+      type: 'module',
+    },
+    null,
+    2,
+  ) + '\n',
+  'utf8',
+);
+
 console.log('Built dist/ for Hostinger');
