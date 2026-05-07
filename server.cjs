@@ -252,16 +252,101 @@ async function boot() {
     res.redirect(`/login?next=${nextUrl}`);
   }
 
-  function renderFeatureImage(url, alt = '', mode = 'default') {
-    const safe = safeUrl(url);
-    if (safe) return `<img class="feature-image" src="${esc(safe)}" alt="${esc(alt)}" loading="lazy" />`;
-    const label = mode === 'card' ? 'admin males nyari gambar' : 'featured image nyusul bos';
-    return `<div class="feature-image feature-image-fallback ${mode === 'card' ? 'feature-image-card' : ''}"><span>${esc(label)}</span></div>`;
+  function hashString(input = '') {
+    return Array.from(String(input)).reduce((acc, char) => ((acc * 31) + char.charCodeAt(0)) >>> 0, 7);
+  }
+
+  function pickPlaceholderTopic(post = {}) {
+    const tags = (post.tags || []).map((tag) => String(tag).toLowerCase());
+    const joined = `${post.title || ''} ${(post.description || '')}`.toLowerCase();
+    if (post.visibility === 'private') return 'private';
+    if (tags.some((tag) => ['python', 'django', 'flask'].includes(tag)) || joined.includes('python')) return 'python';
+    if (tags.some((tag) => ['php', 'laravel', 'wordpress'].includes(tag)) || joined.includes('php')) return 'php';
+    if (tags.some((tag) => ['node', 'nodejs', 'javascript', 'js', 'express'].includes(tag)) || joined.includes('node')) return 'node';
+    if (tags.some((tag) => ['crypto', 'bitcoin', 'ethereum', 'web3'].includes(tag)) || joined.includes('crypto')) return 'crypto';
+    if (tags.some((tag) => ['tutorial', 'guide', 'internet', 'seo', 'blog'].includes(tag))) return 'tutorial';
+    return 'general';
+  }
+
+  function getDefaultFeatureUrl(post = {}) {
+    const topic = pickPlaceholderTopic(post);
+    const seed = hashString(`${post.slug || post.title || 'post'}:${topic}`) % 10;
+    const title = encodeURIComponent(post.title || 'Boss Blog');
+    return `/placeholder/feature.svg?topic=${encodeURIComponent(topic)}&variant=${seed}&title=${title}`;
+  }
+
+  function renderFeatureImage(post = {}, mode = 'default') {
+    const safe = safeUrl(post.featureImage || '');
+    const src = safe || getDefaultFeatureUrl(post);
+    return `<img class="feature-image ${mode === 'card' ? 'feature-image-card' : ''}" src="${esc(src)}" alt="${esc(post.title || 'feature image')}" loading="lazy" />`;
   }
 
   function renderTagChips(tags = []) {
     return tags.map((tag) => `<span class="tag-chip">${esc(tag)}</span>`).join('');
   }
+
+  app.get('/placeholder/feature.svg', (req, res) => {
+    const topic = String(req.query.topic || 'general').toLowerCase();
+    const variant = Math.abs(Number(req.query.variant || 0)) % 10;
+    const title = String(req.query.title || 'Boss Blog').slice(0, 42);
+    const paletteMap = {
+      python: ['#1b1332', '#3d2f82', '#ffd43b', '#4b8bbe'],
+      php: ['#17142b', '#4f46e5', '#c4b5fd', '#8b5cf6'],
+      node: ['#0f1720', '#166534', '#86efac', '#22c55e'],
+      crypto: ['#150f2b', '#7c3aed', '#f59e0b', '#f97316'],
+      tutorial: ['#18122b', '#6d28d9', '#f9a8d4', '#fb7185'],
+      private: ['#140f1f', '#6b21a8', '#f472b6', '#f5d0fe'],
+      general: ['#130f25', '#7237a7', '#c084fc', '#f59e0b'],
+    };
+    const [bg, panel, accent, accent2] = paletteMap[topic] || paletteMap.general;
+    const labelMap = {
+      python: 'PYTHON',
+      php: 'PHP',
+      node: 'NODE',
+      crypto: 'CRYPTO',
+      tutorial: 'TUTORIAL',
+      private: 'PRIVATE',
+      general: 'DEV BLOG',
+    };
+    const label = labelMap[topic] || labelMap.general;
+    const offset = 40 + (variant * 18);
+    res.type('image/svg+xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="${esc(title)}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="${bg}"/>
+      <stop offset="100%" stop-color="${panel}"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="${accent}" stop-opacity="0.0"/>
+      <stop offset="50%" stop-color="${accent}" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="${accent2}" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="675" rx="36" fill="url(#bg)"/>
+  <circle cx="930" cy="140" r="180" fill="${accent}" opacity="0.16"/>
+  <circle cx="220" cy="590" r="200" fill="${accent2}" opacity="0.12"/>
+  <path d="M0 ${470 + variant * 4} C 180 ${390 + variant * 2}, 320 ${560 - variant * 3}, 520 ${450 + variant * 4} S 860 ${520 - variant * 2}, 1200 ${350 + variant * 5}" stroke="url(#glow)" stroke-width="4" fill="none" opacity="0.9"/>
+  <path d="M0 ${520 + variant * 3} C 220 ${460 - variant * 2}, 340 ${620 - variant * 3}, 620 ${520 + variant * 2} S 920 ${600 - variant * 2}, 1200 ${430 + variant * 4}" stroke="${accent2}" stroke-width="2" fill="none" opacity="0.4"/>
+  <g opacity="0.9">
+    <rect x="72" y="72" width="170" height="44" rx="22" fill="rgba(255,255,255,0.08)"/>
+    <text x="157" y="100" text-anchor="middle" fill="#fff" font-size="21" font-family="Arial, sans-serif" font-weight="700">${label}</text>
+  </g>
+  <g transform="translate(830 310)">
+    <rect x="0" y="0" width="250" height="250" rx="36" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/>
+    <circle cx="125" cy="125" r="82" fill="rgba(0,0,0,0.24)" stroke="${accent}" stroke-width="6"/>
+    <text x="125" y="145" text-anchor="middle" fill="#fff" font-size="74" font-family="Arial, sans-serif" font-weight="800">${label.replace(/[^A-Z]/g, '').slice(0, 4) || 'DEV'}</text>
+  </g>
+  <g fill="none" stroke="${accent2}" stroke-width="2" opacity="0.35">
+    <path d="M72 ${offset} H260" />
+    <path d="M72 ${offset + 22} H220" />
+    <path d="M72 ${offset + 44} H290" />
+    <path d="M72 ${offset + 66} H210" />
+  </g>
+  <text x="72" y="560" fill="#ffffff" font-size="54" font-family="Georgia, serif" font-weight="700">${esc(title)}</text>
+  <text x="72" y="610" fill="rgba(255,255,255,0.72)" font-size="24" font-family="Arial, sans-serif">admin males nyari gambar, jadi sistem yang bantuin 😏</text>
+</svg>`);
+  });
 
   app.get('/', async (req, res) => {
     const posts = (await getAllPosts()).filter((post) => post.visibility === 'public' && !post.draft);
@@ -274,7 +359,7 @@ async function boot() {
           <p>Frontpage kita bikin editorial dikit bos — portrait cards, tag lebih ceria, dan fallback image kalau admin lagi males nyari gambar 😏</p>
         </div>
         ${featured ? `<a class="hero-feature card" href="/blog/${featured.slug}">
-          ${renderFeatureImage(featured.featureImage, featured.title, 'card')}
+          ${renderFeatureImage(featured, 'card')}
           <div class="hero-feature-copy">
             <div class="meta-row"><span class="meta">${new Date(featured.date).toLocaleDateString('id-ID')}</span></div>
             <h2>${esc(featured.title)}</h2>
@@ -288,7 +373,7 @@ async function boot() {
           ${posts.map((post) => `
             <article class="post-card">
               <a href="/blog/${post.slug}">
-                ${renderFeatureImage(post.featureImage, post.title, 'card')}
+                ${renderFeatureImage(post, 'card')}
                 <div class="post-card-body">
                   <div class="meta-row"><span class="meta">${new Date(post.date).toLocaleDateString('id-ID')}</span></div>
                   <h3>${esc(post.title)}</h3>
@@ -359,7 +444,7 @@ async function boot() {
       <section class="post-layout">
         <article class="prose-card prose post-main">
           ${badge}
-          ${renderFeatureImage(post.featureImage, post.title)}
+          ${renderFeatureImage(post)}
           <h1>${esc(post.title)}</h1>
           <p class="lede">${esc(post.description)}</p>
           <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} ${post.updated ? `· Updated ${esc(post.updated)}` : ''}</div>
