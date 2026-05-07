@@ -1,39 +1,29 @@
 # Boss Blog
 
-Personal blog built with Astro.
+Simple personal blog with built-in admin, made to deploy easily on basic Node hosting.
 
 ## Features
 
 - Public / unlisted / private posts
-- Password-protected login for private posts + admin
-- Simple built-in Markdown editor
-- Dark / light mode
+- Password login for private posts + admin
+- Built-in Markdown editor
+- File-based content in `content/posts/*.md`
+- No build step required
 
-## Local dev
+## Environment variable
+
+- `BLOG_ADMIN_PASSWORD` = your admin password
+
+## Hostinger settings
+
+- Build command: `npm run build`
+- Output directory: leave empty if allowed, or keep current ignored value
+- Entry file: `server.js`
+- Node version: `22.x`
+
+## Local run
 
 ```bash
 npm install
-BLOG_ADMIN_PASSWORD=your-password npm run dev
+BLOG_ADMIN_PASSWORD=your-password npm start
 ```
-
-## Production env
-
-Set this in your hosting panel:
-
-- `BLOG_ADMIN_PASSWORD` = your secret admin password
-
-## Build & run
-
-```bash
-npm run build
-npm run start
-```
-
-For some hosting panels that dislike running `.mjs` entrypoints directly, use:
-
-- Output directory: `dist`
-- Entry file: `server.js`
-
-## Content storage
-
-Posts are saved to `content/posts/*.md` on the server.
