@@ -336,7 +336,7 @@ async function boot() {
             </div>
             <label><span>Feature image URL</span><input name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." /></label>
             <div class="upload-box">
-              <div><strong>Upload image</strong><p class="muted">Upload gambar lokal, lalu markdown-nya langsung ditempel ke editor. Feature image juga bisa pakai external URL.</p></div>
+              <div><strong>Upload image</strong><p class="muted">Upload gambar lokal. Hasil upload akan kasih URL yang bisa lu tempel ke markdown pakai format <code>![alt text](/uploads/nama-file.jpg)</code>. Feature image juga bisa pakai external URL.</p></div>
               <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
               <div id="uploadResult" class="muted small"></div>
             <div id="uploadDebug" class="muted small"></div>
