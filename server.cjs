@@ -150,6 +150,22 @@ async function boot() {
     return posts.find((post) => post.slug === slug);
   }
 
+  async function getUploadedImages() {
+    const files = await fs.readdir(UPLOADS_DIR, { withFileTypes: true }).catch(() => []);
+    const images = await Promise.all(files
+      .filter((entry) => entry.isFile())
+      .map(async (entry) => {
+        const fullPath = path.join(UPLOADS_DIR, entry.name);
+        const stat = await fs.stat(fullPath).catch(() => null);
+        return stat ? {
+          name: entry.name,
+          url: `/uploads/${entry.name}`,
+          mtimeMs: stat.mtimeMs,
+        } : null;
+      }));
+    return images.filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs);
+  }
+
   function makeSlug(input) {
     return slugify(input || '', { lower: true, strict: true, trim: true }) || `post-${Date.now()}`;
   }
@@ -309,6 +325,7 @@ async function boot() {
 
   app.get('/admin', loginRequired, async (req, res) => {
     const posts = await getAllPosts();
+    const uploads = await getUploadedImages();
     const slug = String(req.query.slug || '');
     const editing = slug ? posts.find((p) => p.slug === slug) : null;
     const body = `
@@ -339,7 +356,13 @@ async function boot() {
               <div><strong>Upload image</strong><p class="muted">Upload gambar lokal. Hasil upload akan kasih URL yang bisa lu tempel ke markdown pakai format <code>![alt text](/uploads/nama-file.jpg)</code>. Feature image juga bisa pakai external URL.</p></div>
               <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
               <div id="uploadResult" class="muted small"></div>
-            <div id="uploadDebug" class="muted small"></div>
+              <div id="uploadDebug" class="muted small"></div>
+              <div class="upload-library">
+                <div class="sidebar-head"><h3>Image Library</h3><span class="muted small">${uploads.length} file</span></div>
+                <div class="sidebar-list">
+                  ${uploads.map((image) => `<div class="sidebar-item"><strong>${esc(image.name)}</strong><span><a href="${esc(image.url)}" target="_blank" rel="noreferrer">Open</a> · <button type="button" class="ghost-btn small-btn" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Use</button></span></div>`).join('') || '<p class="muted small">Belum ada gambar di library, bos.</p>'}
+                </div>
+              </div>
             </div>
             <label class="checkbox"><input type="checkbox" name="draft" ${editing?.draft ? 'checked' : ''} /> <span>Save as draft</span></label>
             <label><span>Content (Markdown)</span><textarea id="bodyField" name="body" rows="20">${esc(editing?.body || '')}</textarea></label>
@@ -353,6 +376,7 @@ async function boot() {
         const uploadResult = document.getElementById('uploadResult');
         const uploadDebug = document.getElementById('uploadDebug');
         const featureImageField = document.querySelector('input[name="featureImage"]');
+        const bodyField = document.getElementById('bodyField');
         window.uploadBossImage = async (event) => {
           event?.preventDefault?.();
           const file = uploadInput?.files?.[0];
@@ -386,6 +410,21 @@ async function boot() {
           return false;
         };
         uploadButton?.addEventListener('click', window.uploadBossImage);
+        document.querySelectorAll('[data-image-url]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const url = button.getAttribute('data-image-url') || '';
+            const name = button.getAttribute('data-image-name') || 'image';
+            if (featureImageField) featureImageField.value = url;
+            if (bodyField) {
+              const markdown = '![' + name + '](' + url + ')';
+              const start = bodyField.selectionStart ?? bodyField.value.length;
+              const end = bodyField.selectionEnd ?? bodyField.value.length;
+              bodyField.value = bodyField.value.slice(0, start) + markdown + bodyField.value.slice(end);
+            }
+            uploadResult.innerHTML = 'Selected: <a href="' + url + '" target="_blank" rel="noreferrer">' + url + '</a>';
+            uploadDebug.textContent = 'Debug: reused existing image';
+          });
+        });
       </script>`;
     res.send(layout({ title: 'Admin — Boss Blog', body, authed: true }));
   });
