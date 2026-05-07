@@ -90,13 +90,15 @@ async function boot() {
     return '';
   }
 
-  function layout({ title, body, authed = false }) {
+  function layout({ title, body, description = '', authed = false }) {
+    const metaDescription = esc((description || '').trim() || 'Boss Blog — catatan, tips, dan random thoughts.');
     return `<!doctype html>
     <html lang="id">
     <head>
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>${esc(title)}</title>
+      <meta name="description" content="${metaDescription}" />
       <link rel="icon" href="/favicon.svg" />
       <link rel="stylesheet" href="/style.css" />
       <script>
@@ -265,7 +267,7 @@ async function boot() {
             </article>`).join('') || '<p>Belum ada post.</p>'}
         </div>
       </section>`;
-    res.send(layout({ title: 'Boss Blog', body, authed: isAuthed(req) }));
+    res.send(layout({ title: 'Boss Blog', body, description: 'Blog pribadi berisi catatan, tips, dan random thoughts yang enak dibaca.', authed: isAuthed(req) }));
   });
 
   app.get('/about', (_req, res) => {
@@ -281,7 +283,7 @@ async function boot() {
           <li>Local image upload + external feature image URL</li>
         </ul>
       </article>`;
-    res.send(layout({ title: 'About — Boss Blog', body, authed: false }));
+    res.send(layout({ title: 'About — Boss Blog', body, description: 'Tentang Boss Blog, blog pribadi dengan catatan, tips development, dan random thoughts.', authed: false }));
   });
 
   app.get('/login', (req, res) => {
@@ -297,7 +299,7 @@ async function boot() {
           <button ${!ADMIN_PASSWORD ? 'disabled' : ''}>Login</button>
         </form>
       </section>`;
-    res.send(layout({ title: 'Login — Boss Blog', body, authed: isAuthed(req) }));
+    res.send(layout({ title: 'Login — Boss Blog', body, description: 'Login admin Boss Blog untuk mengelola post dan konten private.', authed: isAuthed(req) }));
   });
 
   app.post('/login', (req, res) => {
@@ -316,7 +318,7 @@ async function boot() {
 
   app.get('/blog/:slug', async (req, res) => {
     const post = await getPostBySlug(req.params.slug);
-    if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', authed: isAuthed(req) }));
+    if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', description: 'Halaman tidak ditemukan di Boss Blog.', authed: isAuthed(req) }));
     if (post.visibility === 'private' && !isAuthed(req)) return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
     const allPosts = (await getAllPosts()).filter((item) => item.slug !== post.slug && item.visibility === 'public' && !item.draft);
     const relatedPosts = allPosts.filter((item) => item.tags.some((tag) => post.tags.includes(tag))).slice(0, 4);
@@ -357,7 +359,7 @@ async function boot() {
           </div>
         </aside>
       </section>`;
-    res.send(layout({ title: post.title, body, authed: isAuthed(req) }));
+    res.send(layout({ title: post.title, body, description: post.description, authed: isAuthed(req) }));
   });
 
   app.post('/admin/upload-image', loginRequired, (req, res) => {
@@ -682,7 +684,7 @@ async function boot() {
           });
         });
       </script>`;
-    res.send(layout({ title: 'Admin — Boss Blog', body, authed: true }));
+    res.send(layout({ title: 'Admin — Boss Blog', body, description: 'Dashboard admin Boss Blog untuk mengelola post, image upload, dan prompt helper.', authed: true }));
   });
 
   app.post('/admin/save', loginRequired, async (req, res) => {
