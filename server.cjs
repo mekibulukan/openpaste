@@ -403,7 +403,7 @@ async function boot() {
         <aside class="sidebar card">
           <div class="sidebar-head"><h2>Posts</h2><a href="/admin">+ New</a></div>
           <div class="sidebar-list">
-            ${posts.map((post) => `<a class="sidebar-item ${editing?.slug === post.slug ? 'active' : ''}" href="/admin?slug=${post.slug}"><strong>${esc(post.title)}</strong><span>${esc(post.visibility)} · ${esc(post.date)}</span></a>`).join('')}
+            ${posts.map((post) => `<a class="sidebar-item ${editing?.slug === post.slug ? 'active' : ''}" href="/admin?slug=${post.slug}"><strong>${esc(post.title)}</strong></a>`).join('')}
           </div>
           <form method="post" action="/logout"><button class="ghost-btn">Logout</button></form>
         </aside>
@@ -423,11 +423,13 @@ async function boot() {
             </div>
             <label><span>Feature image URL</span><input id="featureImageField" name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." /></label>
             <p class="muted small">Tip: remote image paling aman pakai direct URL <code>.jpg</code> / <code>.png</code>. <code>.webp</code> kadang gagal kalau source-nya redirect, hotlink-protected, atau header-nya aneh. Kalau ngambek, upload lokal aja biar aman.</p>
-            <div class="feature-preview-box">
-              <div class="sidebar-head"><h3>Feature Preview</h3><span id="featureImageStatus" class="muted small">Belum ada gambar</span></div>
-              <img id="featureImagePreview" class="feature-preview-image" alt="Feature preview" hidden />
-              <div id="featureImageFallback" class="feature-image feature-image-fallback feature-preview-fallback"><span>admin males nyari gambar</span></div>
-            </div>
+            <details class="feature-preview-box" id="featurePreviewBox">
+              <summary class="sidebar-head"><h3>Feature Preview</h3><span id="featureImageStatus" class="muted small">Belum ada gambar</span></summary>
+              <div class="feature-preview-body">
+                <img id="featureImagePreview" class="feature-preview-image" alt="Feature preview" hidden />
+                <div id="featureImageFallback" class="feature-image feature-image-fallback feature-preview-fallback"><span>admin males nyari gambar</span></div>
+              </div>
+            </details>
             <div class="upload-box">
               <div><strong>Upload image</strong><p class="muted">Upload gambar lokal. Hasil upload akan kasih URL yang bisa lu tempel ke markdown pakai format <code>![alt text](/uploads/nama-file.jpg)</code>. Feature image juga bisa pakai external URL.</p></div>
               <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
@@ -527,6 +529,7 @@ async function boot() {
         const featureImagePreview = document.getElementById('featureImagePreview');
         const featureImageFallback = document.getElementById('featureImageFallback');
         const featureImageStatus = document.getElementById('featureImageStatus');
+        const featurePreviewBox = document.getElementById('featurePreviewBox');
 
         function refreshFeaturePreview(url) {
           const safeUrl = (url || '').trim();
@@ -537,8 +540,26 @@ async function boot() {
             }
             if (featureImageFallback) featureImageFallback.hidden = false;
             if (featureImageStatus) featureImageStatus.textContent = 'Belum ada gambar';
+            if (featurePreviewBox) featurePreviewBox.open = false;
             return;
           }
+           if (featureImageStatus) featureImageStatus.textContent = 'Mencoba load image...';
+           if (featureImagePreview) {
+             featureImagePreview.hidden = false;
+             featureImagePreview.onload = () => {
+               if (featureImageFallback) featureImageFallback.hidden = true;
+               if (featureImageStatus) featureImageStatus.textContent = 'Image OK';
++              if (featurePreviewBox) featurePreviewBox.open = false;
+             };
+             featureImagePreview.onerror = () => {
+               featureImagePreview.hidden = true;
+               featureImagePreview.removeAttribute('src');
+               if (featureImageFallback) featureImageFallback.hidden = false;
+               if (featureImageStatus) featureImageStatus.textContent = 'Image gagal dimuat — coba JPG/PNG atau upload lokal';
++              if (featurePreviewBox) featurePreviewBox.open = true;
+             };
+             featureImagePreview.src = safeUrl;
+           }
           if (featureImageStatus) featureImageStatus.textContent = 'Mencoba load image...';
           if (featureImagePreview) {
             featureImagePreview.hidden = false;
