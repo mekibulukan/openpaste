@@ -364,9 +364,11 @@ async function boot() {
               <div id="uploadDebug" class="muted small"></div>
               <div class="upload-library">
                 <div class="sidebar-head"><h3>Image Library</h3><span class="muted small">${uploads.length} file · latest ${recentUploads.length}</span></div>
-                <div class="sidebar-list" style="max-height: 320px; overflow: auto;">
-                  ${recentUploads.map((image) => `<div class="sidebar-item"><strong>${esc(image.name)}</strong><span><a href="${esc(image.url)}" target="_blank" rel="noreferrer">Open</a> · <button type="button" class="ghost-btn small-btn" data-action="insert" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Insert</button> · <button type="button" class="ghost-btn small-btn" data-action="use" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Use</button></span></div>`).join('') || '<p class="muted small">Belum ada gambar di library, bos.</p>'}
+                <label class="library-search-wrap"><span class="muted small">Search image</span><input id="librarySearch" type="search" placeholder="Cari nama file..." autocomplete="off" /></label>
+                <div class="library-scroll sidebar-list">
+                  ${recentUploads.map((image) => `<div class="sidebar-item library-item" data-image-search="${esc(image.name).toLowerCase()}"><strong>${esc(image.name)}</strong><span class="library-actions"><a href="${esc(image.url)}" target="_blank" rel="noreferrer">Open</a><button type="button" class="ghost-btn small-btn" data-action="insert" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Insert</button><button type="button" class="ghost-btn small-btn" data-action="use" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Use</button></span></div>`).join('') || '<p class="muted small">Belum ada gambar di library, bos.</p>'}
                 </div>
+                <div id="libraryEmpty" class="muted small" hidden>Nggak ada file yang cocok, bos.</div>
               </div>
             </div>
             <label class="checkbox"><input type="checkbox" name="draft" ${editing?.draft ? 'checked' : ''} /> <span>Save as draft</span></label>
@@ -382,6 +384,8 @@ async function boot() {
         const uploadDebug = document.getElementById('uploadDebug');
         const featureImageField = document.querySelector('input[name="featureImage"]');
         const bodyField = document.getElementById('bodyField');
+        const librarySearch = document.getElementById('librarySearch');
+        const libraryEmpty = document.getElementById('libraryEmpty');
 
         function insertMarkdown(markdown) {
           if (!bodyField) return;
@@ -439,6 +443,23 @@ async function boot() {
           return false;
         };
         uploadButton?.addEventListener('click', window.uploadBossImage);
+
+        function filterLibrary() {
+          const query = (librarySearch?.value || '').trim().toLowerCase();
+          const items = Array.from(document.querySelectorAll('.library-item'));
+          let visibleCount = 0;
+          items.forEach((item) => {
+            const haystack = item.getAttribute('data-image-search') || '';
+            const match = !query || haystack.includes(query);
+            item.hidden = !match;
+            if (match) visibleCount += 1;
+          });
+          if (libraryEmpty) libraryEmpty.hidden = visibleCount > 0;
+        }
+
+        librarySearch?.addEventListener('input', filterLibrary);
+        filterLibrary();
+
         document.querySelectorAll('[data-image-url]').forEach((button) => {
           button.addEventListener('click', () => {
             const url = button.getAttribute('data-image-url') || '';
