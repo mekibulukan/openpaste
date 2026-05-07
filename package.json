@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "node --watch server.js",
-    "build": "node -e \"console.log('No build step needed')\"",
+    "build": "node ./scripts/build.mjs",
     "start": "node ./server.js"
   },
   "dependencies": {

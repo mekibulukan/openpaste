@@ -8,7 +8,7 @@ Simple personal blog with built-in admin, made to deploy easily on basic Node ho
 - Password login for private posts + admin
 - Built-in Markdown editor
 - File-based content in `content/posts/*.md`
-- No build step required
+- Hostinger-friendly dist build output
 
 ## Environment variable
 
@@ -17,7 +17,7 @@ Simple personal blog with built-in admin, made to deploy easily on basic Node ho
 ## Hostinger settings
 
 - Build command: `npm run build`
-- Output directory: leave empty if allowed, or keep current ignored value
+- Output directory: `dist`
 - Entry file: `server.js`
 - Node version: `22.x`
 

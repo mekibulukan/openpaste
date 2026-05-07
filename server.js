@@ -2,14 +2,16 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import matter from 'gray-matter';
 import { marked } from 'marked';
 import slugify from 'slugify';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const POSTS_DIR = path.join(process.cwd(), 'content', 'posts');
-const PUBLIC_DIR = path.join(process.cwd(), 'public');
+const POSTS_DIR = path.join(__dirname, 'content', 'posts');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
 
