@@ -10,12 +10,16 @@ const slugify = require('slugify');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const APP_ROOT = path.basename(__dirname) === 'dist' ? path.join(__dirname, '..') : __dirname;
+const PERSIST_ROOT = process.env.PERSIST_ROOT || path.join(APP_ROOT, '..', 'blog-data');
 const LEGACY_POSTS_DIR = path.join(__dirname, 'content', 'posts');
-const DATA_DIR = process.env.DATA_DIR || path.join(APP_ROOT, 'data');
+const LEGACY_DATA_DIR = path.join(APP_ROOT, 'data');
+const LEGACY_PERSIST_POSTS_DIR = path.join(LEGACY_DATA_DIR, 'posts');
+const LEGACY_UPLOADS_DIR = path.join(APP_ROOT, 'uploads');
+const DATA_DIR = process.env.DATA_DIR || PERSIST_ROOT;
 const POSTS_DIR = process.env.POSTS_DIR || path.join(DATA_DIR, 'posts');
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(APP_ROOT, 'uploads');
-const DEBUG_LOG = path.join(APP_ROOT, 'debug.log');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(PERSIST_ROOT, 'uploads');
+const DEBUG_LOG = path.join(PERSIST_ROOT, 'debug.log');
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
 
@@ -32,26 +36,54 @@ async function writeDebug(message, meta = {}) {
   }
 }
 
-async function migrateLegacyPosts() {
-  const legacyFiles = await fs.readdir(LEGACY_POSTS_DIR).catch(() => []);
-  const currentFiles = await fs.readdir(POSTS_DIR).catch(() => []);
-  if (!legacyFiles.length || currentFiles.length) return;
-  await Promise.all(legacyFiles
-    .filter((file) => file.endsWith('.md'))
-    .map((file) => fs.copyFile(path.join(LEGACY_POSTS_DIR, file), path.join(POSTS_DIR, file))));
-  await writeDebug('Migrated legacy posts to persistent directory', {
-    from: LEGACY_POSTS_DIR,
-    to: POSTS_DIR,
-    files: legacyFiles.filter((file) => file.endsWith('.md')).length,
-  });
+async function migrateFiles(candidates, targetDir, filterFn) {
+  const currentFiles = await fs.readdir(targetDir).catch(() => []);
+  if (currentFiles.length) return;
+  for (const sourceDir of candidates) {
+    const sourceFiles = await fs.readdir(sourceDir).catch(() => []);
+    const selected = sourceFiles.filter(filterFn);
+    if (!selected.length) continue;
+    await Promise.all(selected.map((file) => fs.copyFile(path.join(sourceDir, file), path.join(targetDir, file))));
+    return { from: sourceDir, files: selected.length };
+  }
+  return null;
+}
+
+async function migrateLegacyData() {
+  const postMigration = await migrateFiles(
+    [LEGACY_PERSIST_POSTS_DIR, LEGACY_POSTS_DIR],
+    POSTS_DIR,
+    (file) => file.endsWith('.md'),
+  );
+  if (postMigration) {
+    await writeDebug('Migrated legacy posts to persistent directory', {
+      from: postMigration.from,
+      to: POSTS_DIR,
+      files: postMigration.files,
+    });
+  }
+
+  const uploadMigration = await migrateFiles(
+    [LEGACY_UPLOADS_DIR],
+    UPLOADS_DIR,
+    (file) => !file.startsWith('.'),
+  );
+  if (uploadMigration) {
+    await writeDebug('Migrated legacy uploads to persistent directory', {
+      from: uploadMigration.from,
+      to: UPLOADS_DIR,
+      files: uploadMigration.files,
+    });
+  }
 }
 
 async function boot() {
+  await fs.mkdir(PERSIST_ROOT, { recursive: true });
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.mkdir(POSTS_DIR, { recursive: true });
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  await migrateLegacyPosts();
-  await writeDebug('Boot complete', { APP_ROOT, DATA_DIR, POSTS_DIR, PUBLIC_DIR, UPLOADS_DIR, DEBUG_LOG });
+  await migrateLegacyData();
+  await writeDebug('Boot complete', { APP_ROOT, PERSIST_ROOT, DATA_DIR, POSTS_DIR, PUBLIC_DIR, UPLOADS_DIR, DEBUG_LOG });
 
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
