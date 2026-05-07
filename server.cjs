@@ -404,6 +404,7 @@ async function boot() {
               <label><span>Tags</span><input name="tags" value="${esc((editing?.tags || []).join(', '))}" placeholder="nodejs, notes" /></label>
             </div>
             <label><span>Feature image URL</span><input name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." /></label>
+            <p class="muted small">Tip: remote image paling aman pakai direct URL <code>.jpg</code> / <code>.png</code>. <code>.webp</code> kadang gagal kalau source-nya redirect, hotlink-protected, atau header-nya aneh. Kalau ngambek, upload lokal aja biar aman.</p>
             <div class="upload-box">
               <div><strong>Upload image</strong><p class="muted">Upload gambar lokal. Hasil upload akan kasih URL yang bisa lu tempel ke markdown pakai format <code>![alt text](/uploads/nama-file.jpg)</code>. Feature image juga bisa pakai external URL.</p></div>
               <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
