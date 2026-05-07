@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import multer from 'multer';
 import matter from 'gray-matter';
 import { marked } from 'marked';
 import slugify from 'slugify';
@@ -12,10 +13,32 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const POSTS_DIR = path.join(__dirname, 'content', 'posts');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const UPLOADS_DIR = path.join(PUBLIC_DIR, 'uploads');
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
 
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+await fs.mkdir(POSTS_DIR, { recursive: true });
+await fs.mkdir(UPLOADS_DIR, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+    const base = slugify(path.basename(file.originalname || 'image', ext), { lower: true, strict: true, trim: true }) || 'image';
+    cb(null, `${Date.now()}-${base}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    cb(null, /^image\//.test(file.mimetype));
+  },
+});
+
+app.use(express.urlencoded({ extended: true, limit: '4mb' }));
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(express.static(PUBLIC_DIR));
 
@@ -25,6 +48,14 @@ function esc(value = '') {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function safeUrl(value = '') {
+  const str = String(value || '').trim();
+  if (!str) return '';
+  if (str.startsWith('/')) return str;
+  if (/^https?:\/\//i.test(str)) return str;
+  return '';
 }
 
 function layout({ title, body, authed = false }) {
@@ -70,10 +101,6 @@ function isAuthed(req) {
   return req.cookies[AUTH_COOKIE] === '1';
 }
 
-async function ensurePostsDir() {
-  await fs.mkdir(POSTS_DIR, { recursive: true });
-}
-
 function normalizeMeta(slug, data = {}) {
   return {
     slug,
@@ -83,12 +110,12 @@ function normalizeMeta(slug, data = {}) {
     updated: data.updated || '',
     tags: Array.isArray(data.tags) ? data.tags : [],
     visibility: ['public', 'unlisted', 'private'].includes(data.visibility) ? data.visibility : 'public',
+    featureImage: safeUrl(data.featureImage || data.feature_image || ''),
     draft: Boolean(data.draft),
   };
 }
 
 async function getAllPosts() {
-  await ensurePostsDir();
   const files = (await fs.readdir(POSTS_DIR)).filter((file) => file.endsWith('.md'));
   const posts = await Promise.all(files.map(async (file) => {
     const slug = file.replace(/\.md$/, '');
@@ -113,8 +140,7 @@ function makeSlug(input) {
   return slugify(input || '', { lower: true, strict: true, trim: true }) || `post-${Date.now()}`;
 }
 
-async function savePost({ originalSlug = '', title, description, date, tags, visibility, body, draft }) {
-  await ensurePostsDir();
+async function savePost({ originalSlug = '', title, description, date, tags, visibility, featureImage, body, draft }) {
   const slug = makeSlug(title);
   if (originalSlug && originalSlug !== slug) {
     await fs.rm(path.join(POSTS_DIR, `${originalSlug}.md`), { force: true });
@@ -127,6 +153,7 @@ async function savePost({ originalSlug = '', title, description, date, tags, vis
     updated: new Date().toISOString().slice(0, 10),
     tags,
     visibility,
+    featureImage: safeUrl(featureImage),
     draft,
   });
   await fs.writeFile(file, content, 'utf8');
@@ -137,6 +164,12 @@ function loginRequired(req, res, next) {
   if (isAuthed(req)) return next();
   const nextUrl = encodeURIComponent(req.originalUrl || '/admin');
   res.redirect(`/login?next=${nextUrl}`);
+}
+
+function renderFeatureImage(url, alt = '') {
+  const safe = safeUrl(url);
+  if (!safe) return '';
+  return `<img class="feature-image" src="${esc(safe)}" alt="${esc(alt)}" loading="lazy" />`;
 }
 
 app.get('/', async (req, res) => {
@@ -152,6 +185,7 @@ app.get('/', async (req, res) => {
         ${posts.map((post) => `
           <article class="card">
             <a href="/blog/${post.slug}">
+              ${renderFeatureImage(post.featureImage, post.title)}
               <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} · ${post.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>
               <h3>${esc(post.title)}</h3>
               <p>${esc(post.description)}</p>
@@ -172,6 +206,7 @@ app.get('/about', (req, res) => {
         <li>Express.js</li>
         <li>Markdown files</li>
         <li>Simple built-in admin</li>
+        <li>Local image upload + external feature image URL</li>
       </ul>
     </article>`;
   res.send(layout({ title: 'About — Boss Blog', body, authed: isAuthed(req) }));
@@ -211,13 +246,11 @@ app.get('/blog/:slug', async (req, res) => {
   const post = await getPostBySlug(req.params.slug);
   if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', authed: isAuthed(req) }));
   if (post.visibility === 'private' && !isAuthed(req)) return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
-  if (post.visibility === 'unlisted' || post.visibility === 'private') {
-    // accessible via direct URL only; no extra handling here
-  }
   const badge = post.visibility === 'private' ? '<span class="pill red">🔒 Private</span>' : post.visibility === 'unlisted' ? '<span class="pill yellow">👁️ Unlisted</span>' : '';
   const body = `
     <article class="prose-card prose">
       ${badge}
+      ${renderFeatureImage(post.featureImage, post.title)}
       <h1>${esc(post.title)}</h1>
       <p class="lede">${esc(post.description)}</p>
       <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} ${post.updated ? `· Updated ${esc(post.updated)}` : ''}</div>
@@ -226,6 +259,15 @@ app.get('/blog/:slug', async (req, res) => {
       <div class="actions"><a href="/">← Back</a> ${isAuthed(req) ? `<a href="/admin?slug=${post.slug}">Edit post</a>` : ''}</div>
     </article>`;
   res.send(layout({ title: post.title, body, authed: isAuthed(req) }));
+});
+
+app.post('/admin/upload-image', loginRequired, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+  res.json({
+    ok: true,
+    url: `/uploads/${req.file.filename}`,
+    markdown: `![${req.file.originalname || 'image'}](/uploads/${req.file.filename})`,
+  });
 });
 
 app.get('/admin', loginRequired, async (req, res) => {
@@ -257,12 +299,64 @@ app.get('/admin', loginRequired, async (req, res) => {
             </select></label>
             <label><span>Tags</span><input name="tags" value="${esc((editing?.tags || []).join(', '))}" placeholder="nodejs, notes" /></label>
           </div>
+          <label>
+            <span>Feature image URL</span>
+            <input name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." />
+          </label>
+          <div class="upload-box">
+            <div>
+              <strong>Upload image</strong>
+              <p class="muted">Upload gambar lokal, lalu markdown-nya langsung ditempel ke editor. Feature image juga bisa pakai external URL.</p>
+            </div>
+            <div class="upload-row">
+              <input id="imageUpload" type="file" accept="image/*" />
+              <button id="uploadButton" class="ghost-btn" type="button">Upload</button>
+            </div>
+            <div id="uploadResult" class="muted small"></div>
+          </div>
           <label class="checkbox"><input type="checkbox" name="draft" ${editing?.draft ? 'checked' : ''} /> <span>Save as draft</span></label>
-          <label><span>Content (Markdown)</span><textarea name="body" rows="20">${esc(editing?.body || '')}</textarea></label>
+          <label><span>Content (Markdown)</span><textarea id="bodyField" name="body" rows="20">${esc(editing?.body || '')}</textarea></label>
           <div class="actions"><button type="submit">Save post</button>${editing ? `<a href="/blog/${editing.slug}">Preview</a>` : ''}</div>
         </form>
       </section>
-    </section>`;
+    </section>
+    <script>
+      const bodyField = document.getElementById('bodyField');
+      const uploadInput = document.getElementById('imageUpload');
+      const uploadButton = document.getElementById('uploadButton');
+      const uploadResult = document.getElementById('uploadResult');
+      function insertAtCursor(text) {
+        if (!bodyField) return;
+        const start = bodyField.selectionStart ?? bodyField.value.length;
+        const end = bodyField.selectionEnd ?? bodyField.value.length;
+        bodyField.value = bodyField.value.slice(0, start) + text + bodyField.value.slice(end);
+        bodyField.focus();
+        const pos = start + text.length;
+        bodyField.setSelectionRange(pos, pos);
+      }
+      uploadButton?.addEventListener('click', async () => {
+        const file = uploadInput?.files?.[0];
+        if (!file) {
+          uploadResult.textContent = 'Pilih file dulu boss.';
+          return;
+        }
+        uploadButton.disabled = true;
+        uploadResult.textContent = 'Uploading...';
+        try {
+          const formData = new FormData();
+          formData.append('image', file);
+          const res = await fetch('/admin/upload-image', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed');
+          insertAtCursor('\n' + data.markdown + '\n');
+          uploadResult.innerHTML = 'Uploaded: <a href="' + data.url + '" target="_blank">' + data.url + '</a>';
+        } catch (err) {
+          uploadResult.textContent = err.message || 'Upload gagal';
+        } finally {
+          uploadButton.disabled = false;
+        }
+      });
+    </script>`;
   res.send(layout({ title: 'Admin — Boss Blog', body, authed: true }));
 });
 
@@ -272,11 +366,12 @@ app.post('/admin/save', loginRequired, async (req, res) => {
   const date = String(req.body.date || '').trim();
   const visibility = ['public', 'unlisted', 'private'].includes(req.body.visibility) ? req.body.visibility : 'public';
   const tags = String(req.body.tags || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const featureImage = safeUrl(req.body.featureImage || '');
   const draft = req.body.draft === 'on';
   const body = String(req.body.body || '');
   const originalSlug = String(req.body.originalSlug || '');
   if (!title || !description || !date) return res.redirect('/admin');
-  const slug = await savePost({ originalSlug, title, description, date, tags, visibility, body, draft });
+  const slug = await savePost({ originalSlug, title, description, date, tags, visibility, featureImage, body, draft });
   res.redirect(`/admin?slug=${slug}`);
 });
 

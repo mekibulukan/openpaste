@@ -7,6 +7,8 @@ Simple personal blog with built-in admin, made to deploy easily on basic Node ho
 - Public / unlisted / private posts
 - Password login for private posts + admin
 - Built-in Markdown editor
+- Local image upload into markdown
+- Feature image URL (local or external)
 - File-based content in `content/posts/*.md`
 - Hostinger-friendly dist build output
 

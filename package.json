@@ -15,6 +15,7 @@
     "express": "^5.1.0",
     "gray-matter": "^4.0.3",
     "marked": "^18.0.3",
+    "multer": "^2.0.0",
     "slugify": "^1.6.9"
   }
 }
