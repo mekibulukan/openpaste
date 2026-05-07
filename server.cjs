@@ -20,6 +20,7 @@ const POSTS_DIR = process.env.POSTS_DIR || path.join(DATA_DIR, 'posts');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(PERSIST_ROOT, 'uploads');
 const DEBUG_LOG = path.join(PERSIST_ROOT, 'debug.log');
+const SITE_URL = (process.env.SITE_URL || 'https://dev.openpaste.my.id').replace(/\/$/, '');
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
 
@@ -122,8 +123,16 @@ async function boot() {
     return '';
   }
 
-  function layout({ title, body, description = '', authed = false }) {
+  function makeAbsoluteUrl(input = '/') {
+    if (!input) return SITE_URL;
+    if (/^https?:\/\//i.test(input)) return input;
+    return `${SITE_URL}${input.startsWith('/') ? input : `/${input}`}`;
+  }
+
+  function layout({ title, body, description = '', canonicalPath = '/', ogImage = '/placeholder/feature.svg?topic=general&variant=0&title=Boss%20Blog', authed = false }) {
     const metaDescription = esc((description || '').trim() || 'Boss Blog — catatan, tips, dan random thoughts.');
+    const canonicalUrl = esc(makeAbsoluteUrl(canonicalPath));
+    const socialImage = esc(makeAbsoluteUrl(ogImage));
     return `<!doctype html>
     <html lang="id">
     <head>
@@ -131,6 +140,17 @@ async function boot() {
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>${esc(title)}</title>
       <meta name="description" content="${metaDescription}" />
+      <link rel="canonical" href="${canonicalUrl}" />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="Boss Blog" />
+      <meta property="og:title" content="${esc(title)}" />
+      <meta property="og:description" content="${metaDescription}" />
+      <meta property="og:url" content="${canonicalUrl}" />
+      <meta property="og:image" content="${socialImage}" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content="${esc(title)}" />
+      <meta name="twitter:description" content="${metaDescription}" />
+      <meta name="twitter:image" content="${socialImage}" />
       <link rel="icon" href="/favicon.svg" />
       <link rel="stylesheet" href="/style.css" />
       <script>
@@ -352,6 +372,24 @@ async function boot() {
 </svg>`);
   });
 
+  app.get('/robots.txt', (_req, res) => {
+    res.type('text/plain').send(`User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`);
+  });
+
+  app.get('/sitemap.xml', async (_req, res) => {
+    const posts = (await getAllPosts()).filter((post) => post.visibility === 'public' && !post.draft);
+    const urls = [
+      { loc: `${SITE_URL}/`, lastmod: new Date().toISOString() },
+      { loc: `${SITE_URL}/about`, lastmod: new Date().toISOString() },
+      ...posts.map((post) => ({
+        loc: `${SITE_URL}/blog/${post.slug}`,
+        lastmod: new Date(post.updated || post.date || Date.now()).toISOString(),
+      })),
+    ];
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((entry) => `  <url><loc>${esc(entry.loc)}</loc><lastmod>${entry.lastmod}</lastmod></url>`).join('\n')}\n</urlset>`;
+    res.type('application/xml').send(xml);
+  });
+
   app.get('/', async (req, res) => {
     const posts = (await getAllPosts()).filter((post) => post.visibility === 'public' && !post.draft);
     const featured = posts[0] || null;
@@ -388,7 +426,7 @@ async function boot() {
             </article>`).join('') || '<p>Belum ada post.</p>'}
         </div>
       </section>`;
-    res.send(layout({ title: 'Boss Blog', body, description: 'Blog pribadi berisi catatan, tips, dan random thoughts yang enak dibaca.', authed: isAuthed(req) }));
+    res.send(layout({ title: 'Boss Blog', body, description: 'Blog pribadi berisi catatan, tips, dan random thoughts yang enak dibaca.', canonicalPath: '/', authed: isAuthed(req) }));
   });
 
   app.get('/about', (_req, res) => {
@@ -404,7 +442,7 @@ async function boot() {
           <li>Local image upload + external feature image URL</li>
         </ul>
       </article>`;
-    res.send(layout({ title: 'About — Boss Blog', body, description: 'Tentang Boss Blog, blog pribadi dengan catatan, tips development, dan random thoughts.', authed: false }));
+    res.send(layout({ title: 'About — Boss Blog', body, description: 'Tentang Boss Blog, blog pribadi dengan catatan, tips development, dan random thoughts.', canonicalPath: '/about', authed: false }));
   });
 
   app.get('/login', (req, res) => {
@@ -420,7 +458,7 @@ async function boot() {
           <button ${!ADMIN_PASSWORD ? 'disabled' : ''}>Login</button>
         </form>
       </section>`;
-    res.send(layout({ title: 'Login — Boss Blog', body, description: 'Login admin Boss Blog untuk mengelola post dan konten private.', authed: isAuthed(req) }));
+    res.send(layout({ title: 'Login — Boss Blog', body, description: 'Login admin Boss Blog untuk mengelola post dan konten private.', canonicalPath: '/login', authed: isAuthed(req) }));
   });
 
   app.post('/login', (req, res) => {
@@ -439,7 +477,7 @@ async function boot() {
 
   app.get('/blog/:slug', async (req, res) => {
     const post = await getPostBySlug(req.params.slug);
-    if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', description: 'Halaman tidak ditemukan di Boss Blog.', authed: isAuthed(req) }));
+    if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', description: 'Halaman tidak ditemukan di Boss Blog.', canonicalPath: '/404', authed: isAuthed(req) }));
     if (post.visibility === 'private' && !isAuthed(req)) return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
     const allPosts = (await getAllPosts()).filter((item) => item.slug !== post.slug && item.visibility === 'public' && !item.draft);
     const relatedPosts = allPosts.filter((item) => item.tags.some((tag) => post.tags.includes(tag))).slice(0, 4);
@@ -480,7 +518,7 @@ async function boot() {
           </div>
         </aside>
       </section>`;
-    res.send(layout({ title: post.title, body, description: post.description, authed: isAuthed(req) }));
+    res.send(layout({ title: post.title, body, description: post.description, canonicalPath: `/blog/${post.slug}`, ogImage: post.featureImage || getDefaultFeatureUrl(post), authed: isAuthed(req) }));
   });
 
   app.post('/admin/upload-image', loginRequired, (req, res) => {
@@ -805,7 +843,7 @@ async function boot() {
           });
         });
       </script>`;
-    res.send(layout({ title: 'Admin — Boss Blog', body, description: 'Dashboard admin Boss Blog untuk mengelola post, image upload, dan prompt helper.', authed: true }));
+    res.send(layout({ title: 'Admin — Boss Blog', body, description: 'Dashboard admin Boss Blog untuk mengelola post, image upload, dan prompt helper.', canonicalPath: '/admin', authed: true }));
   });
 
   app.post('/admin/save', loginRequired, async (req, res) => {
