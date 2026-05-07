@@ -408,7 +408,7 @@ async function boot() {
               <div><strong>Upload image</strong><p class="muted">Upload gambar lokal. Hasil upload akan kasih URL yang bisa lu tempel ke markdown pakai format <code>![alt text](/uploads/nama-file.jpg)</code>. Feature image juga bisa pakai external URL.</p></div>
               <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
               <div id="uploadResult" class="muted small"></div>
-              <div id="uploadDebug" class="muted small"></div>
+              <details id="uploadDebugWrap" class="debug-panel"><summary>Debug</summary><div id="uploadDebug" class="muted small"></div></details>
               <div class="upload-library">
                 <div class="sidebar-head"><h3>Image Library</h3><span class="muted small">${uploads.length} file · latest ${recentUploads.length}</span></div>
                 <label class="library-search-wrap"><span class="muted small">Search image</span><input id="librarySearch" type="search" placeholder="Cari nama file..." autocomplete="off" /></label>
@@ -502,7 +502,23 @@ async function boot() {
 
         function renderUploadResult(name, url) {
           const markdown = '![alt text](' + url + ')';
-          uploadResult.innerHTML = 'Markdown: <code>' + markdown + '</code><br><button type="button" class="ghost-btn small-btn" id="insertUploadedImage">Insert to post</button> <button type="button" class="ghost-btn small-btn" id="useUploadedImage">Use as featured</button> <a href="' + url + '" target="_blank" rel="noreferrer">Open</a>';
+          uploadResult.innerHTML = 'Markdown: <code>' + markdown + '</code><br><div class="helper-actions"><button type="button" class="ghost-btn small-btn" id="copyUploadedMarkdown">Copy Markdown</button><button type="button" class="ghost-btn small-btn" id="copyUploadedUrl">Copy URL</button><button type="button" class="ghost-btn small-btn" id="insertUploadedImage">Insert to post</button> <button type="button" class="ghost-btn small-btn" id="useUploadedImage">Use as featured</button> <a href="' + url + '" target="_blank" rel="noreferrer">Open</a></div>';
+          document.getElementById('copyUploadedMarkdown')?.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(markdown);
+              uploadDebug.textContent = 'Debug: copied markdown';
+            } catch {
+              uploadDebug.textContent = 'Debug: markdown ready di layar';
+            }
+          });
+          document.getElementById('copyUploadedUrl')?.addEventListener('click', async () => {
+            try {
+              await navigator.clipboard.writeText(url);
+              uploadDebug.textContent = 'Debug: copied url';
+            } catch {
+              uploadDebug.textContent = 'Debug: url ready di layar';
+            }
+          });
           document.getElementById('insertUploadedImage')?.addEventListener('click', () => {
             insertMarkdown(markdown);
             uploadDebug.textContent = 'Debug: inserted uploaded image into post';
