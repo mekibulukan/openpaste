@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-bg: #ffffff;
+  --color-bg-dark: #0f0f0f;
+  --color-surface: #f9fafb;
+  --color-surface-dark: #1a1a1a;
+  --color-text: #111827;
+  --color-text-dark: #e5e7eb;
+  --color-muted: #6b7280;
+  --color-muted-dark: #9ca3af;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-border: #e5e7eb;
+  --color-border-dark: #2d2d2d;
+}

@@ -1,0 +1,67 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog');
+  return posts
+    .filter(post => !post.data.draft)
+    .map(post => ({
+      params: { id: post.id },
+      props: { post },
+    }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+
+const isPrivate = post.data.visibility === 'private';
+const isUnlisted = post.data.visibility === 'unlisted';
+---
+
+<Layout title={post.data.title} description={post.data.description}>
+  <article>
+    <div class="mb-8">
+      {isPrivate && (
+        <span class="inline-block text-xs px-2.5 py-1 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 mb-3">
+          🔒 Private
+        </span>
+      )}
+      {isUnlisted && (
+        <span class="inline-block text-xs px-2.5 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 mb-3">
+          👁️ Unlisted
+        </span>
+      )}
+      <h1 class="text-4xl font-bold mb-3">{post.data.title}</h1>
+      <div class="flex items-center gap-3 text-sm text-muted dark:text-muted-dark">
+        <time datetime={post.data.date.toISOString()}>
+          {post.data.date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
+        </time>
+        {post.data.updated && (
+          <span>· Updated {post.data.updated.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+        )}
+      </div>
+      <div class="flex gap-1.5 mt-3">
+        {post.data.tags.map(tag => (
+          <span class="text-xs px-2 py-0.5 rounded-full bg-surface dark:bg-surface-dark text-muted dark:text-muted-dark">
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+
+    <div class="prose prose-lg dark:prose-invert max-w-none
+      prose-headings:font-semibold
+      prose-a:text-accent prose-a:no-underline hover:prose-a:underline
+      prose-code:bg-surface dark:prose-code:bg-surface-dark prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
+      prose-pre:bg-surface dark:prose-pre:bg-surface-dark prose-pre:border prose-pre:border-border dark:prose-pre:border-border-dark">
+      <Content />
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-border dark:border-border-dark">
+      <a href="/" class="text-accent hover:text-accent-hover transition-colors">
+        ← Back to home
+      </a>
+    </div>
+  </article>
+</Layout>
