@@ -9,7 +9,7 @@ const dist = path.join(root, 'dist');
 await fs.rm(dist, { recursive: true, force: true });
 await fs.mkdir(dist, { recursive: true });
 
-for (const name of ['server.js', 'public', 'content']) {
+for (const name of ['server.cjs', 'public', 'content']) {
   await fs.cp(path.join(root, name), path.join(dist, name), { recursive: true });
 }
 
@@ -18,8 +18,7 @@ await fs.writeFile(
   JSON.stringify(
     {
       name: 'boss-blog-dist',
-      private: true,
-      type: 'module',
+      private: true
     },
     null,
     2,

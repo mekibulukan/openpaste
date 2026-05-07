@@ -6,9 +6,9 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "node --watch server.js",
+    "dev": "node --watch server.cjs",
     "build": "node ./scripts/build.mjs",
-    "start": "node ./server.js"
+    "start": "node ./server.cjs"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",

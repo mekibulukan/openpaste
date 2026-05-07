@@ -20,7 +20,7 @@ Simple personal blog with built-in admin, made to deploy easily on basic Node ho
 
 - Build command: `npm run build`
 - Output directory: `dist`
-- Entry file: `server.js`
+- Entry file: `server.cjs`
 - Node version: `22.x`
 
 ## Local run
