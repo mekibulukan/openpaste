@@ -310,6 +310,7 @@ async function boot() {
     };
     const label = labelMap[topic] || labelMap.general;
     const offset = 40 + (variant * 18);
+    const mono = label.replace(/[^A-Z]/g, '').slice(0, 4) || 'DEV';
     res.type('image/svg+xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" role="img" aria-label="${esc(title)}">
   <defs>
@@ -324,27 +325,30 @@ async function boot() {
     </linearGradient>
   </defs>
   <rect width="1200" height="675" rx="36" fill="url(#bg)"/>
-  <circle cx="930" cy="140" r="180" fill="${accent}" opacity="0.16"/>
-  <circle cx="220" cy="590" r="200" fill="${accent2}" opacity="0.12"/>
+  <circle cx="940" cy="122" r="170" fill="${accent}" opacity="0.14"/>
+  <circle cx="260" cy="582" r="180" fill="${accent2}" opacity="0.12"/>
   <path d="M0 ${470 + variant * 4} C 180 ${390 + variant * 2}, 320 ${560 - variant * 3}, 520 ${450 + variant * 4} S 860 ${520 - variant * 2}, 1200 ${350 + variant * 5}" stroke="url(#glow)" stroke-width="4" fill="none" opacity="0.9"/>
   <path d="M0 ${520 + variant * 3} C 220 ${460 - variant * 2}, 340 ${620 - variant * 3}, 620 ${520 + variant * 2} S 920 ${600 - variant * 2}, 1200 ${430 + variant * 4}" stroke="${accent2}" stroke-width="2" fill="none" opacity="0.4"/>
   <g opacity="0.9">
     <rect x="72" y="72" width="170" height="44" rx="22" fill="rgba(255,255,255,0.08)"/>
     <text x="157" y="100" text-anchor="middle" fill="#fff" font-size="21" font-family="Arial, sans-serif" font-weight="700">${label}</text>
   </g>
-  <g transform="translate(830 310)">
+  <g transform="translate(475 160)">
     <rect x="0" y="0" width="250" height="250" rx="36" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.14)"/>
     <circle cx="125" cy="125" r="82" fill="rgba(0,0,0,0.24)" stroke="${accent}" stroke-width="6"/>
-    <text x="125" y="145" text-anchor="middle" fill="#fff" font-size="74" font-family="Arial, sans-serif" font-weight="800">${label.replace(/[^A-Z]/g, '').slice(0, 4) || 'DEV'}</text>
+    <text x="125" y="145" text-anchor="middle" fill="#fff" font-size="74" font-family="Arial, sans-serif" font-weight="800">${mono}</text>
   </g>
   <g fill="none" stroke="${accent2}" stroke-width="2" opacity="0.35">
     <path d="M72 ${offset} H260" />
     <path d="M72 ${offset + 22} H220" />
     <path d="M72 ${offset + 44} H290" />
     <path d="M72 ${offset + 66} H210" />
+    <path d="M920 ${offset + 8} H1110" />
+    <path d="M960 ${offset + 30} H1120" />
+    <path d="M900 ${offset + 52} H1085" />
   </g>
-  <text x="72" y="560" fill="#ffffff" font-size="54" font-family="Georgia, serif" font-weight="700">${esc(title)}</text>
-  <text x="72" y="610" fill="rgba(255,255,255,0.72)" font-size="24" font-family="Arial, sans-serif">admin males nyari gambar, jadi sistem yang bantuin 😏</text>
+  <text x="600" y="510" text-anchor="middle" fill="#ffffff" font-size="54" font-family="Georgia, serif" font-weight="700">${esc(title)}</text>
+  <text x="600" y="560" text-anchor="middle" fill="rgba(255,255,255,0.72)" font-size="24" font-family="Arial, sans-serif">admin males nyari gambar, jadi sistem yang bantuin 😏</text>
 </svg>`);
   });
 
