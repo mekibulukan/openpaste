@@ -473,7 +473,7 @@ async function boot() {
             'Tags: ' + tags,
             'Isi artikel:',
             body || '[kosong]'
-          ].join('\n');
+          ].join('\\n');
         }
 
         function buildArticlePrompt() {
@@ -497,7 +497,7 @@ async function boot() {
             '1. deskripsi singkat 1-2 kalimat',
             '2. 5 tag yang relevan',
             '3. prompt featured image yang cocok'
-          ].join('\n');
+          ].join('\\n');
         }
 
         function renderUploadResult(name, url) {
