@@ -398,7 +398,7 @@ async function boot() {
               <label><span>Title</span><input name="title" value="${esc(editing?.title || '')}" required /></label>
               <label><span>Date</span><input type="date" name="date" value="${esc(editing?.date || new Date().toISOString().slice(0,10))}" required /></label>
             </div>
-            <label><span>Description</span><input name="description" value="${esc(editing?.description || '')}" required /></label>
+            <label><span>Description</span><input id="descriptionField" name="description" value="${esc(editing?.description || '')}" required /></label>
             <div class="grid-2">
               <label><span>Visibility</span><select name="visibility">${['public','unlisted','private'].map((v) => `<option value="${v}" ${(editing?.visibility || 'public') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
               <label><span>Tags</span><input name="tags" value="${esc((editing?.tags || []).join(', '))}" placeholder="nodejs, notes" /></label>
@@ -420,6 +420,15 @@ async function boot() {
             </div>
             <label class="checkbox"><input type="checkbox" name="draft" ${editing?.draft ? 'checked' : ''} /> <span>Save as draft</span></label>
             <label><span>Content (Markdown)</span><textarea id="bodyField" name="body" rows="20">${esc(editing?.body || '')}</textarea></label>
+            <div class="ai-helper card">
+              <div class="sidebar-head"><h3>Admin Malas Helper</h3><span class="muted small">Prompt helper dulu biar nggak generik</span></div>
+              <p class="muted small">Belum full auto, tapi ini bantu lu bikin prompt yang lebih natural buat AI luar. Tinggal copy lalu tempel ke tool/model favorit.</p>
+              <div class="helper-actions">
+                <button type="button" class="ghost-btn small-btn" id="copyDescriptionPrompt">Copy Description Prompt</button>
+                <button type="button" class="ghost-btn small-btn" id="copyArticlePrompt">Copy Full Article Prompt</button>
+              </div>
+              <textarea id="promptOutput" rows="8" placeholder="Prompt siap copy bakal nongol di sini..."></textarea>
+            </div>
             <div class="actions"><button type="submit">Save post</button>${editing ? `<a href="/blog/${editing.slug}">Preview</a>` : ''}</div>
           </form>
         </section>
@@ -430,9 +439,13 @@ async function boot() {
         const uploadResult = document.getElementById('uploadResult');
         const uploadDebug = document.getElementById('uploadDebug');
         const featureImageField = document.querySelector('input[name="featureImage"]');
+        const titleField = document.querySelector('input[name="title"]');
+        const descriptionField = document.getElementById('descriptionField');
+        const tagsField = document.querySelector('input[name="tags"]');
         const bodyField = document.getElementById('bodyField');
         const librarySearch = document.getElementById('librarySearch');
         const libraryEmpty = document.getElementById('libraryEmpty');
+        const promptOutput = document.getElementById('promptOutput');
 
         function insertMarkdown(markdown) {
           if (!bodyField) return;
@@ -442,6 +455,49 @@ async function boot() {
           bodyField.focus();
           const pos = start + markdown.length;
           bodyField.setSelectionRange(pos, pos);
+        }
+
+        function buildDescriptionPrompt() {
+          const title = titleField?.value?.trim() || 'Tanpa judul';
+          const tags = tagsField?.value?.trim() || '-';
+          const body = bodyField?.value?.trim() || '';
+          return [
+            'Bikin deskripsi blog pendek dalam Bahasa Indonesia yang natural, bukan gaya AI generik.',
+            'Aturan:',
+            '- Maksimal 2 kalimat',
+            '- Nada santai, hangat, manusiawi',
+            '- Hindari pembuka template seperti "Artikel ini membahas" atau "Dalam artikel ini"',
+            '- Fokus pada manfaat/angle paling menarik',
+            '',
+            'Judul: ' + title,
+            'Tags: ' + tags,
+            'Isi artikel:',
+            body || '[kosong]'
+          ].join('\n');
+        }
+
+        function buildArticlePrompt() {
+          const title = titleField?.value?.trim() || 'Tanpa judul';
+          const tags = tagsField?.value?.trim() || '-';
+          const desc = descriptionField?.value?.trim() || '-';
+          return [
+            'Tulis artikel blog dalam Bahasa Indonesia yang natural dan terasa seperti tulisan manusia, bukan AI generik.',
+            'Aturan:',
+            '- Jangan pakai kalimat template dan basa-basi berlebihan',
+            '- Kasih contoh konkret, opini ringan, dan detail praktis',
+            '- Struktur markdown rapi dengan heading seperlunya',
+            '- Panjang sedang, enak dibaca, tidak muter-muter',
+            '- Boleh sedikit santai, tapi tetap informatif',
+            '',
+            'Topik/Judul: ' + title,
+            'Tags: ' + tags,
+            'Angle/deskripsi awal: ' + desc,
+            '',
+            'Tambahkan juga di akhir:',
+            '1. deskripsi singkat 1-2 kalimat',
+            '2. 5 tag yang relevan',
+            '3. prompt featured image yang cocok'
+          ].join('\n');
         }
 
         function renderUploadResult(name, url) {
@@ -506,6 +562,28 @@ async function boot() {
 
         librarySearch?.addEventListener('input', filterLibrary);
         filterLibrary();
+
+        document.getElementById('copyDescriptionPrompt')?.addEventListener('click', async () => {
+          const prompt = buildDescriptionPrompt();
+          if (promptOutput) promptOutput.value = prompt;
+          try {
+            await navigator.clipboard.writeText(prompt);
+            uploadDebug.textContent = 'Debug: description prompt copied';
+          } catch {
+            uploadDebug.textContent = 'Debug: description prompt ready di box';
+          }
+        });
+
+        document.getElementById('copyArticlePrompt')?.addEventListener('click', async () => {
+          const prompt = buildArticlePrompt();
+          if (promptOutput) promptOutput.value = prompt;
+          try {
+            await navigator.clipboard.writeText(prompt);
+            uploadDebug.textContent = 'Debug: article prompt copied';
+          } catch {
+            uploadDebug.textContent = 'Debug: article prompt ready di box';
+          }
+        });
 
         document.querySelectorAll('[data-image-url]').forEach((button) => {
           button.addEventListener('click', () => {
