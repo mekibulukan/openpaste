@@ -266,6 +266,22 @@ async function boot() {
     return slug;
   }
 
+  function normalizeImportItem(item = {}) {
+    const title = String(item.title || '').trim();
+    if (!title) throw new Error('title wajib ada');
+    return {
+      originalSlug: '',
+      title,
+      description: String(item.description || '').trim() || `Post tentang ${title}`,
+      date: String(item.date || '').trim() || new Date().toISOString().slice(0, 10),
+      tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : String(item.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
+      visibility: ['public', 'unlisted', 'private'].includes(item.visibility) ? item.visibility : 'public',
+      featureImage: safeUrl(item.featureImage || item.feature_image || ''),
+      body: String(item.body || item.content || '').trim(),
+      draft: Boolean(item.draft),
+    };
+  }
+
   function loginRequired(req, res, next) {
     if (isAuthed(req)) return next();
     const nextUrl = encodeURIComponent(req.originalUrl || '/admin');
@@ -521,6 +537,25 @@ async function boot() {
     res.send(layout({ title: post.title, body, description: post.description, canonicalPath: `/blog/${post.slug}`, ogImage: post.featureImage || getDefaultFeatureUrl(post), authed: isAuthed(req) }));
   });
 
+  app.post('/admin/import-json', loginRequired, async (req, res) => {
+    try {
+      const payload = Array.isArray(req.body) ? req.body : Array.isArray(req.body.items) ? req.body.items : null;
+      if (!payload || !payload.length) return res.status(400).json({ ok: false, error: 'JSON harus berupa array post atau { items: [...] }' });
+      const imported = [];
+      for (const item of payload) {
+        const normalized = normalizeImportItem(item);
+        const slug = await savePost(normalized);
+        imported.push({ slug, title: normalized.title });
+      }
+      await writeDebug('Imported JSON posts', { count: imported.length });
+      return res.json({ ok: true, count: imported.length, imported });
+    } catch (error) {
+      console.error('Import JSON error:', error);
+      await writeDebug('Import JSON error', { error: error.message, stack: error.stack || '' });
+      return res.status(400).json({ ok: false, error: error.message || 'Import gagal' });
+    }
+  });
+
   app.post('/admin/upload-image', loginRequired, (req, res) => {
     writeDebug('Upload request received', {
       contentType: req.headers['content-type'] || '',
@@ -609,6 +644,15 @@ async function boot() {
               </div>
               <textarea id="promptOutput" rows="8" placeholder="Prompt siap copy bakal nongol di sini..."></textarea>
             </div>
+            <div class="ai-helper card">
+              <div class="sidebar-head"><h3>JSON Import</h3><span class="muted small">Bulk post buat admin pemalas</span></div>
+              <p class="muted small">Paste array JSON atau object <code>{"items": [...]}</code>. Field aman: <code>title</code>, <code>description</code>, <code>date</code>, <code>tags</code>, <code>visibility</code>, <code>draft</code>, <code>featureImage</code>, <code>body</code>.</p>
+              <textarea id="jsonImportInput" rows="10" placeholder='[{"title":"Judul post","description":"Deskripsi","date":"2026-05-07","tags":["nodejs"],"visibility":"public","draft":false,"featureImage":"/uploads/sample.jpg","body":"# Isi markdown"}]'></textarea>
+              <div class="helper-actions">
+                <button type="button" class="ghost-btn small-btn" id="importJsonButton">Import JSON</button>
+              </div>
+              <div id="jsonImportResult" class="muted small"></div>
+            </div>
             <details class="feature-preview-box" id="featurePreviewBox">
               <summary class="sidebar-head"><h3>Feature Preview</h3><span id="featureImageStatus" class="muted small">Belum ada gambar</span></summary>
               <div class="feature-preview-body">
@@ -633,6 +677,8 @@ async function boot() {
         const librarySearch = document.getElementById('librarySearch');
         const libraryEmpty = document.getElementById('libraryEmpty');
         const promptOutput = document.getElementById('promptOutput');
+        const jsonImportInput = document.getElementById('jsonImportInput');
+        const jsonImportResult = document.getElementById('jsonImportResult');
 
         function insertMarkdown(markdown) {
           if (!bodyField) return;
@@ -822,6 +868,29 @@ async function boot() {
             uploadDebug.textContent = 'Debug: article prompt copied';
           } catch {
             uploadDebug.textContent = 'Debug: article prompt ready di box';
+          }
+        });
+
+        document.getElementById('importJsonButton')?.addEventListener('click', async () => {
+          const raw = jsonImportInput?.value?.trim() || '';
+          if (!raw) {
+            if (jsonImportResult) jsonImportResult.textContent = 'Paste JSON dulu boss.';
+            return;
+          }
+          try {
+            const parsed = JSON.parse(raw);
+            if (jsonImportResult) jsonImportResult.textContent = 'Importing...';
+            const res = await fetch('/admin/import-json', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify(parsed)
+            });
+            const payload = await res.json();
+            if (!res.ok || !payload.ok) throw new Error(payload.error || 'Import gagal');
+            if (jsonImportResult) jsonImportResult.innerHTML = 'Imported <strong>' + payload.count + '</strong> post. Reload admin kalau mau lihat list terbaru.';
+          } catch (error) {
+            if (jsonImportResult) jsonImportResult.textContent = error.message || 'Import gagal';
           }
         });
 
