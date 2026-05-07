@@ -1,0 +1,91 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { isAuthenticated } from '../../lib/auth';
+import { getAllPosts, getPostBySlug } from '../../lib/posts';
+
+if (!isAuthenticated(Astro.cookies)) {
+  return Astro.redirect(`/login?next=${encodeURIComponent('/admin')}`);
+}
+
+const slug = Astro.url.searchParams.get('slug') || '';
+const posts = await getAllPosts();
+const editing = slug ? await getPostBySlug(slug) : null;
+---
+
+<Layout title="Admin — Boss Blog">
+  <section class="grid lg:grid-cols-[320px,1fr] gap-8">
+    <aside class="rounded-3xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-5 h-fit">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h2 class="text-xl font-semibold">Posts</h2>
+        <a href="/admin" class="text-sm text-accent">+ New</a>
+      </div>
+      <div class="space-y-3">
+        {posts.map((post) => (
+          <a href={`/admin?slug=${post.slug}`} class={`block rounded-2xl border px-4 py-3 transition-colors ${editing?.slug === post.slug ? 'border-accent bg-white dark:bg-black/20' : 'border-border dark:border-border-dark hover:bg-white dark:hover:bg-black/20'}`}>
+            <div class="font-medium">{post.title}</div>
+            <div class="text-xs text-muted dark:text-muted-dark mt-1">{post.visibility} · {post.date}</div>
+          </a>
+        ))}
+      </div>
+      <form method="POST" action="/api/auth/logout" class="mt-6">
+        <button type="submit" class="text-sm text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark">Logout</button>
+      </form>
+    </aside>
+
+    <section class="rounded-3xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-6">
+      <div class="mb-6">
+        <h1 class="text-3xl font-bold">{editing ? 'Edit Post' : 'New Post'}</h1>
+        <p class="text-muted dark:text-muted-dark mt-2">Ghost-like enough buat nulis cepat, simpan langsung ke server.</p>
+      </div>
+
+      <form method="POST" action="/api/save-post" class="space-y-5">
+        <input type="hidden" name="originalSlug" value={editing?.slug || ''} />
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="block">
+            <span class="block text-sm mb-2">Title</span>
+            <input name="title" value={editing?.title || ''} class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent" required />
+          </label>
+          <label class="block">
+            <span class="block text-sm mb-2">Date</span>
+            <input name="date" type="date" value={editing?.date || new Date().toISOString().slice(0, 10)} class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent" required />
+          </label>
+        </div>
+
+        <label class="block">
+          <span class="block text-sm mb-2">Description</span>
+          <input name="description" value={editing?.description || ''} class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent" required />
+        </label>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <label class="block">
+            <span class="block text-sm mb-2">Visibility</span>
+            <select name="visibility" class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent">
+              {['public','unlisted','private'].map((value) => (
+                <option value={value} selected={(editing?.visibility || 'public') === value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block">
+            <span class="block text-sm mb-2">Tags</span>
+            <input name="tags" value={editing?.tags.join(', ') || ''} class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent" placeholder="nodejs, journal, random" />
+          </label>
+        </div>
+
+        <label class="flex items-center gap-3 text-sm">
+          <input type="checkbox" name="draft" checked={editing?.draft} class="rounded border-border dark:border-border-dark" />
+          Save as draft
+        </label>
+
+        <label class="block">
+          <span class="block text-sm mb-2">Content (Markdown)</span>
+          <textarea name="body" rows="20" class="w-full rounded-3xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-5 py-4 outline-none focus:ring-2 focus:ring-accent font-mono text-sm" placeholder="# Tulis sesuatu yang bagus...">{editing?.body || ''}</textarea>
+        </label>
+
+        <div class="flex items-center gap-3 flex-wrap">
+          <button type="submit" class="rounded-2xl bg-accent hover:bg-accent-hover text-white px-5 py-3 font-medium transition-colors">Save post</button>
+          {editing && <a href={`/blog/${editing.slug}`} class="text-sm text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark">Preview live</a>}
+        </div>
+      </form>
+    </section>
+  </section>
+</Layout>

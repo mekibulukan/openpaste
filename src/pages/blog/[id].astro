@@ -1,25 +1,25 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import { getCollection, render } from 'astro:content';
+import { getPostBySlug } from '../../lib/posts';
+import { isAuthenticated } from '../../lib/auth';
 
-export async function getStaticPaths() {
-  const posts = await getCollection('blog');
-  return posts
-    .filter(post => !post.data.draft)
-    .map(post => ({
-      params: { id: post.id },
-      props: { post },
-    }));
+const id = Astro.params.id || '';
+const post = await getPostBySlug(id);
+
+if (!post) {
+  return Astro.redirect('/');
 }
 
-const { post } = Astro.props;
-const { Content } = await render(post);
+const authed = isAuthenticated(Astro.cookies);
+const isPrivate = post.visibility === 'private';
+const isUnlisted = post.visibility === 'unlisted';
 
-const isPrivate = post.data.visibility === 'private';
-const isUnlisted = post.data.visibility === 'unlisted';
+if (isPrivate && !authed) {
+  return Astro.redirect(`/login?next=/blog/${post.slug}`);
+}
 ---
 
-<Layout title={post.data.title} description={post.data.description}>
+<Layout title={post.title} description={post.description}>
   <article>
     <div class="mb-8">
       {isPrivate && (
@@ -32,18 +32,17 @@ const isUnlisted = post.data.visibility === 'unlisted';
           👁️ Unlisted
         </span>
       )}
-      <h1 class="text-4xl font-bold mb-3">{post.data.title}</h1>
-      <div class="flex items-center gap-3 text-sm text-muted dark:text-muted-dark">
-        <time datetime={post.data.date.toISOString()}>
-          {post.data.date.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
+      <h1 class="text-4xl font-bold mb-3">{post.title}</h1>
+      <p class="text-lg text-muted dark:text-muted-dark mb-4">{post.description}</p>
+      <div class="flex items-center gap-3 text-sm text-muted dark:text-muted-dark flex-wrap">
+        <time datetime={post.date}>
+          {new Date(post.date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}
         </time>
-        {post.data.updated && (
-          <span>· Updated {post.data.updated.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-        )}
+        {post.updated && <span>· Updated {post.updated}</span>}
       </div>
-      <div class="flex gap-1.5 mt-3">
-        {post.data.tags.map(tag => (
-          <span class="text-xs px-2 py-0.5 rounded-full bg-surface dark:bg-surface-dark text-muted dark:text-muted-dark">
+      <div class="flex gap-1.5 mt-3 flex-wrap">
+        {post.tags.map(tag => (
+          <span class="text-xs px-2 py-0.5 rounded-full bg-surface dark:bg-surface-dark text-muted dark:text-muted-dark border border-border dark:border-border-dark">
             {tag}
           </span>
         ))}
@@ -54,14 +53,11 @@ const isUnlisted = post.data.visibility === 'unlisted';
       prose-headings:font-semibold
       prose-a:text-accent prose-a:no-underline hover:prose-a:underline
       prose-code:bg-surface dark:prose-code:bg-surface-dark prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
-      prose-pre:bg-surface dark:prose-pre:bg-surface-dark prose-pre:border prose-pre:border-border dark:prose-pre:border-border-dark">
-      <Content />
-    </div>
+      prose-pre:bg-surface dark:prose-pre:bg-surface-dark prose-pre:border prose-pre:border-border dark:prose-pre:border-border-dark" set:html={post.html} />
 
-    <div class="mt-12 pt-8 border-t border-border dark:border-border-dark">
-      <a href="/" class="text-accent hover:text-accent-hover transition-colors">
-        ← Back to home
-      </a>
+    <div class="mt-12 pt-8 border-t border-border dark:border-border-dark flex items-center justify-between gap-4 flex-wrap">
+      <a href="/" class="text-accent hover:text-accent-hover transition-colors">← Back to home</a>
+      {authed && <a href={`/admin?slug=${post.slug}`} class="text-sm text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark">Edit post</a>}
     </div>
   </article>
 </Layout>

@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { isAuthenticated } from '../lib/auth';
 
 interface Props {
   title: string;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 const { title, description = "Blog pribadi Boss Mesum" } = Astro.props;
+const authed = isAuthenticated(Astro.cookies);
 ---
 
 <!doctype html>
@@ -32,6 +34,7 @@ const { title, description = "Blog pribadi Boss Mesum" } = Astro.props;
         <div class="flex items-center gap-4">
           <a href="/" class="text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark transition-colors">Home</a>
           <a href="/about" class="text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark transition-colors">About</a>
+          <a href={authed ? '/admin' : '/login'} class="text-muted dark:text-muted-dark hover:text-text dark:hover:text-text-dark transition-colors">{authed ? 'Admin' : 'Login'}</a>
           <button
             id="theme-toggle"
             class="p-2 rounded-lg hover:bg-surface dark:hover:bg-surface-dark transition-colors"

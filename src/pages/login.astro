@@ -1,0 +1,49 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { isAuthenticated, getAdminPassword } from '../lib/auth';
+
+const next = Astro.url.searchParams.get('next') || '/admin';
+const hasPassword = Boolean(getAdminPassword());
+
+if (isAuthenticated(Astro.cookies)) {
+  return Astro.redirect(next);
+}
+---
+
+<Layout title="Login — Boss Blog">
+  <section class="max-w-md mx-auto py-10">
+    <div class="rounded-3xl border border-border dark:border-border-dark bg-surface dark:bg-surface-dark p-8 shadow-sm">
+      <h1 class="text-3xl font-bold mb-3">Boss Login 🔐</h1>
+      <p class="text-muted dark:text-muted-dark mb-6">
+        Login buat buka post private dan admin editor.
+      </p>
+
+      {!hasPassword && (
+        <div class="mb-6 rounded-2xl border border-yellow-300/60 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
+          Set environment variable <code>BLOG_ADMIN_PASSWORD</code> dulu di hosting panel.
+        </div>
+      )}
+
+      <form method="POST" action="/api/auth/login" class="space-y-4">
+        <input type="hidden" name="next" value={next} />
+        <label class="block">
+          <span class="block text-sm mb-2">Password</span>
+          <input
+            name="password"
+            type="password"
+            class="w-full rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-black/20 px-4 py-3 outline-none focus:ring-2 focus:ring-accent"
+            placeholder="Masukin password boss"
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          class="w-full rounded-2xl bg-accent hover:bg-accent-hover text-white px-4 py-3 font-medium transition-colors disabled:opacity-50"
+          disabled={!hasPassword}
+        >
+          Login
+        </button>
+      </form>
+    </div>
+  </section>
+</Layout>
