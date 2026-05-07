@@ -29,6 +29,11 @@ npm run build
 npm run start
 ```
 
+For some hosting panels that dislike running `.mjs` entrypoints directly, use:
+
+- Output directory: `dist`
+- Entry file: `server.js`
+
 ## Content storage
 
 Posts are saved to `content/posts/*.md` on the server.
