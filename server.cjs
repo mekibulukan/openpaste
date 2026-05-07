@@ -200,29 +200,49 @@ async function boot() {
     res.redirect(`/login?next=${nextUrl}`);
   }
 
-  function renderFeatureImage(url, alt = '') {
+  function renderFeatureImage(url, alt = '', mode = 'default') {
     const safe = safeUrl(url);
-    if (!safe) return '';
-    return `<img class="feature-image" src="${esc(safe)}" alt="${esc(alt)}" loading="lazy" />`;
+    if (safe) return `<img class="feature-image" src="${esc(safe)}" alt="${esc(alt)}" loading="lazy" />`;
+    const label = mode === 'card' ? 'admin males nyari gambar' : 'featured image nyusul bos';
+    return `<div class="feature-image feature-image-fallback ${mode === 'card' ? 'feature-image-card' : ''}"><span>${esc(label)}</span></div>`;
+  }
+
+  function renderTagChips(tags = []) {
+    return tags.map((tag) => `<span class="tag-chip">${esc(tag)}</span>`).join('');
   }
 
   app.get('/', async (req, res) => {
     const posts = (await getAllPosts()).filter((post) => post.visibility === 'public' && !post.draft);
+    const featured = posts[0] || null;
     const body = `
-      <section class="hero">
-        <h1>Hey 👋</h1>
-        <p>Blog pribadi. Catatan, tips, dan random thoughts.</p>
+      <section class="hero hero-compact">
+        <div>
+          <p class="eyebrow">Boss Blog</p>
+          <h1>Catatan, tips, dan random thoughts yang enak dibaca.</h1>
+          <p>Frontpage kita bikin editorial dikit bos — portrait cards, tag lebih ceria, dan fallback image kalau admin lagi males nyari gambar 😏</p>
+        </div>
+        ${featured ? `<a class="hero-feature card" href="/blog/${featured.slug}">
+          ${renderFeatureImage(featured.featureImage, featured.title, 'card')}
+          <div class="hero-feature-copy">
+            <div class="meta-row"><span class="meta">${new Date(featured.date).toLocaleDateString('id-ID')}</span></div>
+            <h2>${esc(featured.title)}</h2>
+            <p>${esc(featured.description)}</p>
+          </div>
+        </a>` : ''}
       </section>
       <section>
-        <h2>Recent Posts</h2>
-        <div class="post-list">
+        <div class="section-head"><h2>Recent Posts</h2><p class="muted">Portrait cards dulu biar rapi, nanti orientasi manual bisa kita tambah dari admin.</p></div>
+        <div class="post-grid">
           ${posts.map((post) => `
-            <article class="card">
+            <article class="post-card">
               <a href="/blog/${post.slug}">
-                ${renderFeatureImage(post.featureImage, post.title)}
-                <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} · ${post.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join(' ')}</div>
-                <h3>${esc(post.title)}</h3>
-                <p>${esc(post.description)}</p>
+                ${renderFeatureImage(post.featureImage, post.title, 'card')}
+                <div class="post-card-body">
+                  <div class="meta-row"><span class="meta">${new Date(post.date).toLocaleDateString('id-ID')}</span></div>
+                  <h3>${esc(post.title)}</h3>
+                  <p>${esc(post.description)}</p>
+                  <div class="tag-row">${renderTagChips(post.tags)}</div>
+                </div>
               </a>
             </article>`).join('') || '<p>Belum ada post.</p>'}
         </div>
@@ -280,18 +300,45 @@ async function boot() {
     const post = await getPostBySlug(req.params.slug);
     if (!post || post.draft) return res.status(404).send(layout({ title: 'Not found', body: '<h1>404</h1><p>Post nggak ketemu.</p>', authed: isAuthed(req) }));
     if (post.visibility === 'private' && !isAuthed(req)) return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+    const allPosts = (await getAllPosts()).filter((item) => item.slug !== post.slug && item.visibility === 'public' && !item.draft);
+    const relatedPosts = allPosts.filter((item) => item.tags.some((tag) => post.tags.includes(tag))).slice(0, 4);
     const badge = post.visibility === 'private' ? '<span class="pill red">🔒 Private</span>' : post.visibility === 'unlisted' ? '<span class="pill yellow">👁️ Unlisted</span>' : '';
     const body = `
-      <article class="prose-card prose">
-        ${badge}
-        ${renderFeatureImage(post.featureImage, post.title)}
-        <h1>${esc(post.title)}</h1>
-        <p class="lede">${esc(post.description)}</p>
-        <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} ${post.updated ? `· Updated ${esc(post.updated)}` : ''}</div>
-        <div class="tags">${post.tags.map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
-        <div class="content">${post.html}</div>
-        <div class="actions"><a href="/">← Back</a> ${isAuthed(req) ? `<a href="/admin?slug=${post.slug}">Edit post</a>` : ''}</div>
-      </article>`;
+      <section class="post-layout">
+        <article class="prose-card prose post-main">
+          ${badge}
+          ${renderFeatureImage(post.featureImage, post.title)}
+          <h1>${esc(post.title)}</h1>
+          <p class="lede">${esc(post.description)}</p>
+          <div class="meta">${new Date(post.date).toLocaleDateString('id-ID')} ${post.updated ? `· Updated ${esc(post.updated)}` : ''}</div>
+          <div class="tags tag-row">${renderTagChips(post.tags)}</div>
+          <div class="content">${post.html}</div>
+          <div class="actions"><a href="/">← Back</a> ${isAuthed(req) ? `<a href="/admin?slug=${post.slug}">Edit post</a>` : ''}</div>
+        </article>
+        <aside class="post-side">
+          <div class="card side-card">
+            <h3>Tags</h3>
+            <div class="tag-row">${renderTagChips(post.tags) || '<span class="muted">Belum ada tag.</span>'}</div>
+          </div>
+          <div class="card side-card">
+            <h3>Related Posts</h3>
+            <div class="sidebar-list">
+              ${relatedPosts.map((item) => `<a class="sidebar-item" href="/blog/${item.slug}"><strong>${esc(item.title)}</strong><span>${new Date(item.date).toLocaleDateString('id-ID')}</span></a>`).join('') || '<p class="muted small">Belum ada related post yang cocok, bos.</p>'}
+            </div>
+          </div>
+          <div class="card side-card">
+            <h3>Elsewhere</h3>
+            <div class="sidebar-list compact-list">
+              <a class="sidebar-item" href="https://x.com" target="_blank" rel="noreferrer"><strong>X / Twitter</strong><span>Buat share kalau nanti mau.</span></a>
+              <a class="sidebar-item" href="https://instagram.com" target="_blank" rel="noreferrer"><strong>Instagram</strong><span>Masih placeholder, gampang diganti nanti.</span></a>
+            </div>
+          </div>
+          <div class="card side-card ad-card">
+            <h3>Ads / Promo Slot</h3>
+            <p class="muted">Tempat iklan, CTA, affiliate, atau banner receh bos. Masih dummy dulu.</p>
+          </div>
+        </aside>
+      </section>`;
     res.send(layout({ title: post.title, body, authed: isAuthed(req) }));
   });
 
