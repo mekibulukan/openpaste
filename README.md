@@ -9,13 +9,15 @@ Simple personal blog with built-in admin, running as a plain Express app.
 - Built-in Markdown editor
 - Local image upload into markdown
 - Feature image URL (local or external)
-- File-based content in `content/posts/*.md`
+- File-based content in persistent `data/posts/*.md`
 - Uploads stored in `uploads/`
 
 ## Environment variable
 
 - `BLOG_ADMIN_PASSWORD` = your admin password
 - `UPLOADS_DIR` = optional custom uploads directory
+- `POSTS_DIR` = optional custom posts directory
+- `DATA_DIR` = optional base directory for persistent app data
 
 ## Hostinger settings
 

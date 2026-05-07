@@ -10,7 +10,9 @@ const slugify = require('slugify');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const APP_ROOT = path.basename(__dirname) === 'dist' ? path.join(__dirname, '..') : __dirname;
-const POSTS_DIR = path.join(__dirname, 'content', 'posts');
+const LEGACY_POSTS_DIR = path.join(__dirname, 'content', 'posts');
+const DATA_DIR = process.env.DATA_DIR || path.join(APP_ROOT, 'data');
+const POSTS_DIR = process.env.POSTS_DIR || path.join(DATA_DIR, 'posts');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(APP_ROOT, 'uploads');
 const DEBUG_LOG = path.join(APP_ROOT, 'debug.log');
@@ -30,10 +32,26 @@ async function writeDebug(message, meta = {}) {
   }
 }
 
+async function migrateLegacyPosts() {
+  const legacyFiles = await fs.readdir(LEGACY_POSTS_DIR).catch(() => []);
+  const currentFiles = await fs.readdir(POSTS_DIR).catch(() => []);
+  if (!legacyFiles.length || currentFiles.length) return;
+  await Promise.all(legacyFiles
+    .filter((file) => file.endsWith('.md'))
+    .map((file) => fs.copyFile(path.join(LEGACY_POSTS_DIR, file), path.join(POSTS_DIR, file))));
+  await writeDebug('Migrated legacy posts to persistent directory', {
+    from: LEGACY_POSTS_DIR,
+    to: POSTS_DIR,
+    files: legacyFiles.filter((file) => file.endsWith('.md')).length,
+  });
+}
+
 async function boot() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.mkdir(POSTS_DIR, { recursive: true });
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  await writeDebug('Boot complete', { APP_ROOT, POSTS_DIR, PUBLIC_DIR, UPLOADS_DIR, DEBUG_LOG });
+  await migrateLegacyPosts();
+  await writeDebug('Boot complete', { APP_ROOT, DATA_DIR, POSTS_DIR, PUBLIC_DIR, UPLOADS_DIR, DEBUG_LOG });
 
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
