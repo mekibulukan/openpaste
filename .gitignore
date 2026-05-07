@@ -11,7 +11,13 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+console.log
+stderr
+stdout
+*.log
 
+# auto-generated uploads
+uploads/
 
 # environment variables
 .env

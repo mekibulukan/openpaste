@@ -9,15 +9,31 @@ const slugify = require('slugify');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const APP_ROOT = path.basename(__dirname) === 'dist' ? path.join(__dirname, '..') : __dirname;
 const POSTS_DIR = path.join(__dirname, 'content', 'posts');
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const UPLOADS_DIR = path.join(PUBLIC_DIR, 'uploads');
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(APP_ROOT, 'uploads');
+const DEBUG_LOG = path.join(APP_ROOT, 'debug.log');
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
+
+async function writeDebug(message, meta = {}) {
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    message,
+    ...meta,
+  }) + '\n';
+  try {
+    await fs.appendFile(DEBUG_LOG, line, 'utf8');
+  } catch (error) {
+    console.error('Failed to write debug log:', error);
+  }
+}
 
 async function boot() {
   await fs.mkdir(POSTS_DIR, { recursive: true });
   await fs.mkdir(UPLOADS_DIR, { recursive: true });
+  await writeDebug('Boot complete', { APP_ROOT, POSTS_DIR, PUBLIC_DIR, UPLOADS_DIR, DEBUG_LOG });
 
   const storage = multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
@@ -37,6 +53,7 @@ async function boot() {
   app.use(express.urlencoded({ extended: true, limit: '4mb' }));
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());
+  app.use('/uploads', express.static(UPLOADS_DIR));
   app.use(express.static(PUBLIC_DIR));
 
   function esc(value = '') {
@@ -258,9 +275,36 @@ async function boot() {
     res.send(layout({ title: post.title, body, authed: isAuthed(req) }));
   });
 
-  app.post('/admin/upload-image', loginRequired, upload.single('image'), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
-    res.json({ ok: true, url: `/uploads/${req.file.filename}`, markdown: `![${req.file.originalname || 'image'}](/uploads/${req.file.filename})` });
+  app.post('/admin/upload-image', loginRequired, (req, res) => {
+    writeDebug('Upload request received', {
+      contentType: req.headers['content-type'] || '',
+      contentLength: req.headers['content-length'] || '',
+      cookiePresent: Boolean(req.headers.cookie),
+    });
+    upload.single('image')(req, res, async (error) => {
+      if (error) {
+        console.error('Upload image error:', error);
+        await writeDebug('Upload image error', {
+          error: error.message,
+          code: error.code || '',
+          field: error.field || '',
+          stack: error.stack || '',
+        });
+        return res.status(400).json({ ok: false, error: error.message || 'Upload failed' });
+      }
+      if (!req.file) {
+        await writeDebug('Upload image missing file', {});
+        return res.status(400).json({ ok: false, error: 'No image uploaded or file type is not supported' });
+      }
+      await writeDebug('Upload image success', {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        filename: req.file.filename,
+        destination: req.file.destination,
+      });
+      res.json({ ok: true, url: `/uploads/${req.file.filename}`, filename: req.file.filename });
+    });
   });
 
   app.get('/admin', loginRequired, async (req, res) => {
@@ -293,8 +337,9 @@ async function boot() {
             <label><span>Feature image URL</span><input name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." /></label>
             <div class="upload-box">
               <div><strong>Upload image</strong><p class="muted">Upload gambar lokal, lalu markdown-nya langsung ditempel ke editor. Feature image juga bisa pakai external URL.</p></div>
-              <div class="upload-row"><input id="imageUpload" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button">Upload</button></div>
+              <div class="upload-row"><input id="imageUpload" name="image" type="file" accept="image/*" /><button id="uploadButton" class="ghost-btn" type="button" onclick="return window.uploadBossImage?.(event)">Upload</button></div>
               <div id="uploadResult" class="muted small"></div>
+            <div id="uploadDebug" class="muted small"></div>
             </div>
             <label class="checkbox"><input type="checkbox" name="draft" ${editing?.draft ? 'checked' : ''} /> <span>Save as draft</span></label>
             <label><span>Content (Markdown)</span><textarea id="bodyField" name="body" rows="20">${esc(editing?.body || '')}</textarea></label>
@@ -303,38 +348,44 @@ async function boot() {
         </section>
       </section>
       <script>
-        const bodyField = document.getElementById('bodyField');
         const uploadInput = document.getElementById('imageUpload');
         const uploadButton = document.getElementById('uploadButton');
         const uploadResult = document.getElementById('uploadResult');
-        function insertAtCursor(text) {
-          if (!bodyField) return;
-          const start = bodyField.selectionStart ?? bodyField.value.length;
-          const end = bodyField.selectionEnd ?? bodyField.value.length;
-          bodyField.value = bodyField.value.slice(0, start) + text + bodyField.value.slice(end);
-          bodyField.focus();
-          const pos = start + text.length;
-          bodyField.setSelectionRange(pos, pos);
-        }
-        uploadButton?.addEventListener('click', async () => {
+        const uploadDebug = document.getElementById('uploadDebug');
+        const featureImageField = document.querySelector('input[name="featureImage"]');
+        window.uploadBossImage = async (event) => {
+          event?.preventDefault?.();
           const file = uploadInput?.files?.[0];
-          if (!file) { uploadResult.textContent = 'Pilih file dulu boss.'; return; }
+          if (!file) { uploadResult.textContent = 'Pilih file dulu boss.'; return false; }
           uploadButton.disabled = true;
           uploadResult.textContent = 'Uploading...';
+          uploadDebug.textContent = 'Debug: ' + [file.name, file.type || 'no-mime', file.size + ' bytes'].join(' | ');
           try {
             const formData = new FormData();
             formData.append('image', file);
-            const res = await fetch('/admin/upload-image', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed');
-            insertAtCursor('\n' + data.markdown + '\n');
-            uploadResult.innerHTML = 'Uploaded: <a href="' + data.url + '" target="_blank">' + data.url + '</a>';
+            const res = await fetch('/admin/upload-image', {
+              method: 'POST',
+              body: formData,
+              headers: { Accept: 'application/json' },
+              credentials: 'same-origin'
+            });
+            const contentType = res.headers.get('content-type') || '';
+            const payload = contentType.includes('application/json') ? await res.json() : { ok: false, error: await res.text() };
+            if (!res.ok || !payload.ok) throw new Error(payload.error || 'Upload failed');
+            if (featureImageField) featureImageField.value = payload.url;
+            uploadResult.innerHTML = 'Uploaded: <a href="' + payload.url + '" target="_blank" rel="noreferrer">' + payload.url + '</a>';
+            uploadDebug.textContent = 'Debug: success';
+            uploadInput.value = '';
           } catch (err) {
+            console.error('Upload gagal:', err);
             uploadResult.textContent = err.message || 'Upload gagal';
+            uploadDebug.textContent = 'Debug: ' + (err?.stack || err?.message || String(err));
           } finally {
             uploadButton.disabled = false;
           }
-        });
+          return false;
+        };
+        uploadButton?.addEventListener('click', window.uploadBossImage);
       </script>`;
     res.send(layout({ title: 'Admin — Boss Blog', body, authed: true }));
   });

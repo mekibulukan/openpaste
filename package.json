@@ -7,7 +7,6 @@
   },
   "scripts": {
     "dev": "node --watch server.cjs",
-    "build": "node ./scripts/build.mjs",
     "start": "node ./server.cjs"
   },
   "dependencies": {

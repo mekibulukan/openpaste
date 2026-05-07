@@ -1,6 +1,6 @@
 # Boss Blog
 
-Simple personal blog with built-in admin, made to deploy easily on basic Node hosting.
+Simple personal blog with built-in admin, running as a plain Express app.
 
 ## Features
 
@@ -10,18 +10,22 @@ Simple personal blog with built-in admin, made to deploy easily on basic Node ho
 - Local image upload into markdown
 - Feature image URL (local or external)
 - File-based content in `content/posts/*.md`
-- Hostinger-friendly dist build output
+- Uploads stored in `uploads/`
 
 ## Environment variable
 
 - `BLOG_ADMIN_PASSWORD` = your admin password
+- `UPLOADS_DIR` = optional custom uploads directory
 
 ## Hostinger settings
 
-- Build command: `npm run build`
-- Output directory: `dist`
+Use the Express preset with:
+
+- Package manager: `npm`
 - Entry file: `server.cjs`
 - Node version: `22.x`
+- Build command: leave empty if Hostinger allows it
+- Root directory: `./`
 
 ## Local run
 
