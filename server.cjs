@@ -166,6 +166,10 @@ async function boot() {
     return images.filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs);
   }
 
+  function makeMarkdownImage(name, url) {
+    return `![${name}](${url})`;
+  }
+
   function makeSlug(input) {
     return slugify(input || '', { lower: true, strict: true, trim: true }) || `post-${Date.now()}`;
   }
@@ -326,6 +330,7 @@ async function boot() {
   app.get('/admin', loginRequired, async (req, res) => {
     const posts = await getAllPosts();
     const uploads = await getUploadedImages();
+    const recentUploads = uploads.slice(0, 24);
     const slug = String(req.query.slug || '');
     const editing = slug ? posts.find((p) => p.slug === slug) : null;
     const body = `
@@ -358,9 +363,9 @@ async function boot() {
               <div id="uploadResult" class="muted small"></div>
               <div id="uploadDebug" class="muted small"></div>
               <div class="upload-library">
-                <div class="sidebar-head"><h3>Image Library</h3><span class="muted small">${uploads.length} file</span></div>
-                <div class="sidebar-list">
-                  ${uploads.map((image) => `<div class="sidebar-item"><strong>${esc(image.name)}</strong><span><a href="${esc(image.url)}" target="_blank" rel="noreferrer">Open</a> · <button type="button" class="ghost-btn small-btn" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Use</button></span></div>`).join('') || '<p class="muted small">Belum ada gambar di library, bos.</p>'}
+                <div class="sidebar-head"><h3>Image Library</h3><span class="muted small">${uploads.length} file · latest ${recentUploads.length}</span></div>
+                <div class="sidebar-list" style="max-height: 320px; overflow: auto;">
+                  ${recentUploads.map((image) => `<div class="sidebar-item"><strong>${esc(image.name)}</strong><span><a href="${esc(image.url)}" target="_blank" rel="noreferrer">Open</a> · <button type="button" class="ghost-btn small-btn" data-action="insert" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Insert</button> · <button type="button" class="ghost-btn small-btn" data-action="use" data-image-url="${esc(image.url)}" data-image-name="${esc(image.name)}">Use</button></span></div>`).join('') || '<p class="muted small">Belum ada gambar di library, bos.</p>'}
                 </div>
               </div>
             </div>
@@ -377,6 +382,30 @@ async function boot() {
         const uploadDebug = document.getElementById('uploadDebug');
         const featureImageField = document.querySelector('input[name="featureImage"]');
         const bodyField = document.getElementById('bodyField');
+
+        function insertMarkdown(markdown) {
+          if (!bodyField) return;
+          const start = bodyField.selectionStart ?? bodyField.value.length;
+          const end = bodyField.selectionEnd ?? bodyField.value.length;
+          bodyField.value = bodyField.value.slice(0, start) + markdown + bodyField.value.slice(end);
+          bodyField.focus();
+          const pos = start + markdown.length;
+          bodyField.setSelectionRange(pos, pos);
+        }
+
+        function renderUploadResult(name, url) {
+          const markdown = '![alt text](' + url + ')';
+          uploadResult.innerHTML = 'Markdown: <code>' + markdown + '</code><br><button type="button" class="ghost-btn small-btn" id="insertUploadedImage">Insert to post</button> <button type="button" class="ghost-btn small-btn" id="useUploadedImage">Use as featured</button> <a href="' + url + '" target="_blank" rel="noreferrer">Open</a>';
+          document.getElementById('insertUploadedImage')?.addEventListener('click', () => {
+            insertMarkdown(markdown);
+            uploadDebug.textContent = 'Debug: inserted uploaded image into post';
+          });
+          document.getElementById('useUploadedImage')?.addEventListener('click', () => {
+            if (featureImageField) featureImageField.value = url;
+            uploadDebug.textContent = 'Debug: set uploaded image as featured';
+          });
+        }
+
         window.uploadBossImage = async (event) => {
           event?.preventDefault?.();
           const file = uploadInput?.files?.[0];
@@ -397,7 +426,7 @@ async function boot() {
             const payload = contentType.includes('application/json') ? await res.json() : { ok: false, error: await res.text() };
             if (!res.ok || !payload.ok) throw new Error(payload.error || 'Upload failed');
             if (featureImageField) featureImageField.value = payload.url;
-            uploadResult.innerHTML = 'Uploaded: <a href="' + payload.url + '" target="_blank" rel="noreferrer">' + payload.url + '</a>';
+            renderUploadResult(payload.filename || 'image', payload.url);
             uploadDebug.textContent = 'Debug: success';
             uploadInput.value = '';
           } catch (err) {
@@ -414,15 +443,17 @@ async function boot() {
           button.addEventListener('click', () => {
             const url = button.getAttribute('data-image-url') || '';
             const name = button.getAttribute('data-image-name') || 'image';
-            if (featureImageField) featureImageField.value = url;
-            if (bodyField) {
-              const markdown = '![' + name + '](' + url + ')';
-              const start = bodyField.selectionStart ?? bodyField.value.length;
-              const end = bodyField.selectionEnd ?? bodyField.value.length;
-              bodyField.value = bodyField.value.slice(0, start) + markdown + bodyField.value.slice(end);
+            const action = button.getAttribute('data-action') || 'use';
+            const markdown = '![' + name + '](' + url + ')';
+            if (action === 'insert') {
+              insertMarkdown(markdown);
+              uploadResult.innerHTML = 'Selected markdown: <code>' + markdown + '</code>';
+              uploadDebug.textContent = 'Debug: reused existing image in post';
+              return;
             }
-            uploadResult.innerHTML = 'Selected: <a href="' + url + '" target="_blank" rel="noreferrer">' + url + '</a>';
-            uploadDebug.textContent = 'Debug: reused existing image';
+            if (featureImageField) featureImageField.value = url;
+            uploadResult.innerHTML = 'Featured image: <a href="' + url + '" target="_blank" rel="noreferrer">' + url + '</a>';
+            uploadDebug.textContent = 'Debug: reused existing image as featured';
           });
         });
       </script>`;
