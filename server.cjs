@@ -21,6 +21,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(PERSIST_ROOT, 'uploads');
 const DEBUG_LOG = path.join(PERSIST_ROOT, 'debug.log');
 const SITE_URL = (process.env.SITE_URL || 'https://dev.openpaste.my.id').replace(/\/$/, '');
+const DEFAULT_DESCRIPTION_TONE = ['formal', 'santai', 'nakal'].includes(process.env.DEFAULT_DESCRIPTION_TONE) ? process.env.DEFAULT_DESCRIPTION_TONE : 'santai';
 const AUTH_COOKIE = 'boss_blog_auth';
 const ADMIN_PASSWORD = process.env.BLOG_ADMIN_PASSWORD || '';
 
@@ -195,14 +196,31 @@ async function boot() {
     return `${day}/${month}/${year}`;
   }
 
-  function getDefaultDescription(title, date) {
+  function normalizeTone(value = '') {
+    return ['formal', 'santai', 'nakal'].includes(value) ? value : DEFAULT_DESCRIPTION_TONE;
+  }
+
+  function getDefaultDescription(title, date, tone = DEFAULT_DESCRIPTION_TONE) {
     const displayDate = formatDisplayDate(date);
-    const templates = [
-      `Openpaste ${displayDate}, ${title}. Untuk berlangganan silahkan Subscribe atau Bookmark Openpaste.my.id.`,
-      `${title} tayang di Openpaste ${displayDate}. Simpan dulu link-nya dan balik lagi kalau butuh panduan yang nggak muter-muter.`,
-      `Openpaste ${displayDate} bahas ${title}. Kalau cocok, bookmark Openpaste.my.id biar next kali nggak nyasar cari ulang.`,
-      `${title} — catatan Openpaste edisi ${displayDate}. Buat update berikutnya, subscribe atau bookmark Openpaste.my.id dulu bos.`,
-    ];
+    const templateMap = {
+      formal: [
+        `Openpaste ${displayDate} membahas ${title}. Simpan halaman ini dan bookmark Openpaste.my.id untuk update berikutnya.`,
+        `${title} dipublikasikan di Openpaste pada ${displayDate}. Kunjungi kembali Openpaste.my.id untuk panduan dan catatan terbaru.`,
+        `Catatan Openpaste edisi ${displayDate}: ${title}. Untuk mengikuti update selanjutnya, silakan subscribe atau bookmark Openpaste.my.id.`,
+      ],
+      santai: [
+        `Openpaste ${displayDate}, ${title}. Untuk berlangganan silahkan Subscribe atau Bookmark Openpaste.my.id.`,
+        `${title} tayang di Openpaste ${displayDate}. Simpan dulu link-nya dan balik lagi kalau butuh panduan yang nggak muter-muter.`,
+        `Openpaste ${displayDate} bahas ${title}. Kalau cocok, bookmark Openpaste.my.id biar next kali nggak nyasar cari ulang.`,
+        `${title} — catatan Openpaste edisi ${displayDate}. Buat update berikutnya, subscribe atau bookmark Openpaste.my.id dulu bos.`,
+      ],
+      nakal: [
+        `Openpaste ${displayDate} lagi ngulik ${title}. Kalau bahasannya bikin nagih, bookmark Openpaste.my.id dulu bos biar gampang lanjut ronde berikutnya.`,
+        `${title} nongol di Openpaste ${displayDate}. Jangan cuma lewat, simpan link-nya dan balik lagi kalau butuh yang lebih greget.`,
+        `Catatan Openpaste ${displayDate}: ${title}. Kalau cocok di kepala, subscribe atau bookmark Openpaste.my.id biar hubungan kita nggak putus di tengah jalan.`,
+      ],
+    };
+    const templates = templateMap[normalizeTone(tone)] || templateMap.santai;
     const seed = String(title || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) + String(date || '').length;
     return templates[seed % templates.length];
   }
@@ -210,13 +228,15 @@ async function boot() {
   function normalizeMeta(slug, data = {}) {
     const title = data.title || slug;
     const date = data.date || new Date().toISOString().slice(0, 10);
-    const description = (data.description || '').trim() || getDefaultDescription(title, date);
+    const descriptionTone = normalizeTone(data.descriptionTone || data.description_tone || '');
+    const description = (data.description || '').trim() || getDefaultDescription(title, date, descriptionTone);
     return {
       slug,
       title,
       description,
       date,
       updated: data.updated || '',
+      descriptionTone,
       tags: Array.isArray(data.tags) ? data.tags : [],
       visibility: ['public', 'unlisted', 'private'].includes(data.visibility) ? data.visibility : 'public',
       featureImage: safeUrl(data.featureImage || data.feature_image || ''),
@@ -269,18 +289,20 @@ async function boot() {
     return slugify(input || '', { lower: true, strict: true, trim: true }) || `post-${Date.now()}`;
   }
 
-  async function savePost({ originalSlug = '', title, description, date, tags, visibility, featureImage, body, draft }) {
+  async function savePost({ originalSlug = '', title, description, date, descriptionTone, tags, visibility, featureImage, body, draft }) {
     const slug = makeSlug(title);
     if (originalSlug && originalSlug !== slug) {
       await fs.rm(path.join(POSTS_DIR, `${originalSlug}.md`), { force: true });
     }
     const file = path.join(POSTS_DIR, `${slug}.md`);
-    const finalDescription = String(description || '').trim() || getDefaultDescription(title, date);
+    const finalTone = normalizeTone(descriptionTone || '');
+    const finalDescription = String(description || '').trim() || getDefaultDescription(title, date, finalTone);
     const content = matter.stringify((body || '').trim() + '\n', {
       title,
       description: finalDescription,
       date,
       updated: new Date().toISOString().slice(0, 10),
+      descriptionTone: finalTone,
       tags,
       visibility,
       featureImage: safeUrl(featureImage),
@@ -294,11 +316,13 @@ async function boot() {
     const title = String(item.title || '').trim();
     if (!title) throw new Error('title wajib ada');
     const date = String(item.date || '').trim() || new Date().toISOString().slice(0, 10);
+    const descriptionTone = normalizeTone(item.descriptionTone || item.description_tone || '');
     return {
       originalSlug: '',
       title,
-      description: String(item.description || '').trim() || getDefaultDescription(title, date),
+      description: String(item.description || '').trim() || getDefaultDescription(title, date, descriptionTone),
       date,
+      descriptionTone,
       tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : String(item.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
       visibility: ['public', 'unlisted', 'private'].includes(item.visibility) ? item.visibility : 'public',
       featureImage: safeUrl(item.featureImage || item.feature_image || ''),
@@ -637,10 +661,14 @@ async function boot() {
               <label><span>Title</span><input name="title" value="${esc(editing?.title || '')}" required /></label>
               <label><span>Date</span><input type="date" name="date" value="${esc(editing?.date || new Date().toISOString().slice(0,10))}" required /></label>
             </div>
-            <label><span>Description</span><input id="descriptionField" name="description" value="${esc(editing?.description || '')}" required /></label>
+            <label><span>Description</span><input id="descriptionField" name="description" value="${esc(editing?.description || '')}" placeholder="Kosongin aja kalau mau auto-template" /></label>
             <div class="grid-2">
+              <label><span>Description tone</span><select name="descriptionTone">${['formal','santai','nakal'].map((tone) => `<option value="${tone}" ${(editing?.descriptionTone || DEFAULT_DESCRIPTION_TONE) === tone ? 'selected' : ''}>${tone}</option>`).join('')}</select></label>
               <label><span>Visibility</span><select name="visibility">${['public','unlisted','private'].map((v) => `<option value="${v}" ${(editing?.visibility || 'public') === v ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+            </div>
+            <div class="grid-2">
               <label><span>Tags</span><input name="tags" value="${esc((editing?.tags || []).join(', '))}" placeholder="nodejs, notes" /></label>
+              <div></div>
             </div>
             <label><span>Feature image URL</span><input id="featureImageField" name="featureImage" value="${esc(editing?.featureImage || '')}" placeholder="/uploads/example.jpg atau https://..." /></label>
             <p class="muted small">Tip: remote image paling aman pakai direct URL <code>.jpg</code> / <code>.png</code>. <code>.webp</code> kadang gagal kalau source-nya redirect, hotlink-protected, atau header-nya aneh. Kalau ngambek, upload lokal aja biar aman.</p>
@@ -945,13 +973,14 @@ async function boot() {
     const description = String(req.body.description || '').trim();
     const date = String(req.body.date || '').trim();
     const visibility = ['public', 'unlisted', 'private'].includes(req.body.visibility) ? req.body.visibility : 'public';
+    const descriptionTone = normalizeTone(String(req.body.descriptionTone || ''));
     const tags = String(req.body.tags || '').split(',').map((s) => s.trim()).filter(Boolean);
     const featureImage = safeUrl(req.body.featureImage || '');
     const draft = req.body.draft === 'on';
     const body = String(req.body.body || '');
     const originalSlug = String(req.body.originalSlug || '');
-    if (!title || !description || !date) return res.redirect('/admin');
-    const slug = await savePost({ originalSlug, title, description, date, tags, visibility, featureImage, body, draft });
+    if (!title || !date) return res.redirect('/admin');
+    const slug = await savePost({ originalSlug, title, description, date, descriptionTone, tags, visibility, featureImage, body, draft });
     res.redirect(`/admin?slug=${slug}`);
   });
 

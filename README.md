@@ -16,6 +16,7 @@ Simple personal blog with built-in admin, running as a plain Express app.
 
 - `BLOG_ADMIN_PASSWORD` = your admin password
 - `SITE_URL` = public site URL for canonical/OG/sitemap (default: `https://dev.openpaste.my.id`)
+- `DEFAULT_DESCRIPTION_TONE` = `formal`, `santai`, or `nakal` for auto-generated descriptions (default: `santai`)
 - `PERSIST_ROOT` = optional persistent root directory outside deploy folder
 - `UPLOADS_DIR` = optional custom uploads directory
 - `POSTS_DIR` = optional custom posts directory
