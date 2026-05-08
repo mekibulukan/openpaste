@@ -188,11 +188,21 @@ async function boot() {
   }
 
   function normalizeMeta(slug, data = {}) {
+    const title = data.title || slug;
+    const date = data.date || new Date().toISOString().slice(0, 10);
+    let description = (data.description || '').trim();
+    if (!description) {
+      const dateObj = new Date(date);
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      description = `Openpaste ${day}/${month}/${year}, ${title}. Untuk berlangganan silahkan Subscribe atau Bookmark Openpaste.my.id`;
+    }
     return {
       slug,
-      title: data.title || slug,
-      description: data.description || '',
-      date: data.date || new Date().toISOString().slice(0, 10),
+      title,
+      description,
+      date,
       updated: data.updated || '',
       tags: Array.isArray(data.tags) ? data.tags : [],
       visibility: ['public', 'unlisted', 'private'].includes(data.visibility) ? data.visibility : 'public',
