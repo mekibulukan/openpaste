@@ -187,17 +187,30 @@ async function boot() {
     return req.cookies[AUTH_COOKIE] === '1';
   }
 
+  function formatDisplayDate(dateInput) {
+    const dateObj = new Date(dateInput || new Date().toISOString().slice(0, 10));
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const year = dateObj.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  function getDefaultDescription(title, date) {
+    const displayDate = formatDisplayDate(date);
+    const templates = [
+      `Openpaste ${displayDate}, ${title}. Untuk berlangganan silahkan Subscribe atau Bookmark Openpaste.my.id.`,
+      `${title} tayang di Openpaste ${displayDate}. Simpan dulu link-nya dan balik lagi kalau butuh panduan yang nggak muter-muter.`,
+      `Openpaste ${displayDate} bahas ${title}. Kalau cocok, bookmark Openpaste.my.id biar next kali nggak nyasar cari ulang.`,
+      `${title} — catatan Openpaste edisi ${displayDate}. Buat update berikutnya, subscribe atau bookmark Openpaste.my.id dulu bos.`,
+    ];
+    const seed = String(title || '').split('').reduce((sum, char) => sum + char.charCodeAt(0), 0) + String(date || '').length;
+    return templates[seed % templates.length];
+  }
+
   function normalizeMeta(slug, data = {}) {
     const title = data.title || slug;
     const date = data.date || new Date().toISOString().slice(0, 10);
-    let description = (data.description || '').trim();
-    if (!description) {
-      const dateObj = new Date(date);
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      description = `Openpaste ${day}/${month}/${year}, ${title}. Untuk berlangganan silahkan Subscribe atau Bookmark Openpaste.my.id`;
-    }
+    const description = (data.description || '').trim() || getDefaultDescription(title, date);
     return {
       slug,
       title,
@@ -262,9 +275,10 @@ async function boot() {
       await fs.rm(path.join(POSTS_DIR, `${originalSlug}.md`), { force: true });
     }
     const file = path.join(POSTS_DIR, `${slug}.md`);
+    const finalDescription = String(description || '').trim() || getDefaultDescription(title, date);
     const content = matter.stringify((body || '').trim() + '\n', {
       title,
-      description,
+      description: finalDescription,
       date,
       updated: new Date().toISOString().slice(0, 10),
       tags,
@@ -279,11 +293,12 @@ async function boot() {
   function normalizeImportItem(item = {}) {
     const title = String(item.title || '').trim();
     if (!title) throw new Error('title wajib ada');
+    const date = String(item.date || '').trim() || new Date().toISOString().slice(0, 10);
     return {
       originalSlug: '',
       title,
-      description: String(item.description || '').trim() || `Post tentang ${title}`,
-      date: String(item.date || '').trim() || new Date().toISOString().slice(0, 10),
+      description: String(item.description || '').trim() || getDefaultDescription(title, date),
+      date,
       tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag).trim()).filter(Boolean) : String(item.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
       visibility: ['public', 'unlisted', 'private'].includes(item.visibility) ? item.visibility : 'public',
       featureImage: safeUrl(item.featureImage || item.feature_image || ''),
